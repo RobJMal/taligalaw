@@ -1,14 +1,31 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
+pub struct Position3D {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub struct Quaternion {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+    pub w: f64,
+}
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+pub struct EulerRPY {
+    pub roll: f64,
+    pub pitch: f64,
+    pub yaw: f64,
+}
+
+pub struct Transform {
+    pub position: Position3D,
+    pub orientation: Quaternion,
+}
+
+pub struct Joint {
+    pub name: String,
+    pub parent: String,
+    pub child: String,
+    pub transform: Transform,
+    pub axis: Position3D,
 }
