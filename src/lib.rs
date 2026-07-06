@@ -1,9 +1,11 @@
+#[derive(Debug)]
 pub struct Position3D {
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
 
+#[derive(Debug)]
 pub struct Quaternion {
     pub x: f64,
     pub y: f64,
@@ -11,17 +13,20 @@ pub struct Quaternion {
     pub w: f64,
 }
 
+#[derive(Debug)]
 pub struct EulerRPY {
     pub roll: f64,
     pub pitch: f64,
     pub yaw: f64,
 }
 
+#[derive(Debug)]
 pub struct Transform {
     pub position: Position3D,
     pub orientation: Quaternion,
 }
 
+#[derive(Debug)]
 pub struct Joint {
     pub name: String,
     pub parent: String,
