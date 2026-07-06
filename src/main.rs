@@ -81,14 +81,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let joint: Joint = Joint { name, parent, child, transform, axis, limit_lower, limit_upper };
 
-            println!("joint name: {:?}", joint.name);
-            println!("parent: {:?}", joint.parent);
-            println!("child: {:?}", joint.child);
-            println!("position: {:?}", joint.transform.position);
-            println!("orientation: {:?}", joint.transform.orientation);
-            println!("axis: {:?}", joint.axis);
-            println!("limit_lower: {:?}", joint.limit_lower);
-            println!("limit_upper: {:?}", joint.limit_upper);
+            println!("joint: {:?}", joint);
             println!("");
         }
     }
