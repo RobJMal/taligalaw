@@ -1,6 +1,6 @@
 use std::fs;
 
-use taligalaw::{EulerRPY, Joint, Position3D, Transform};
+use taligalaw::types::{EulerRPY, Joint, Position3D, Transform};
 
 fn parse_vec3_str(input_str: &str) -> Result<(f64, f64, f64), Box<dyn std::error::Error>> {
     // Parses and extracts values from string. Assumes will contain 3 values.
