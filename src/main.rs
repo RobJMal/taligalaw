@@ -40,24 +40,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing child")?
                 .to_string();
 
-            let xyz_str: &str = node
-                .children()
-                .find(|n| n.tag_name().name() == "origin")
-                .and_then(|n| n.attribute("xyz"))
-                .ok_or("missing xyz")?;
+            // Extracting joint XYZ and RPY
+            let joint_origin = node
+                                                .children()
+                                                .find(|n| n.tag_name().name() == "origin")
+                                                .ok_or("missing origin")?;
+            
+            let xyz_str: &str = joint_origin
+                                .attribute("xyz")
+                                .ok_or("missing XYZ")?;
             let (x, y, z) = parse_vec3_str(xyz_str)?;
             let xyz: Position3D = Position3D { x, y, z };
-
-            let rpy_str: &str = node
-                .children()
-                .find(|n| n.tag_name().name() == "origin")
-                .and_then(|n| n.attribute("rpy"))
-                .ok_or("missing xyz")?;
+                                                
+            let rpy_str = joint_origin
+                                        .attribute("rpy")
+                                        .ok_or("missing RPY")?;
             let (roll, pitch, yaw) = parse_vec3_str(rpy_str)?;
             let rpy: EulerRPY = EulerRPY { roll, pitch, yaw };
 
             let transform: Transform = Transform { position: xyz, orientation: rpy.to_quat() };
-
+            
+            // Extracting axis angles 
             let axis_str: &str = node
                 .children()
                 .find(|n| n.tag_name().name() == "axis")
@@ -65,7 +68,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("missing xyz value for axis")?;
             let (axis_x, axis_y, axis_z) = parse_vec3_str(axis_str)?;
             let axis: Position3D = Position3D { x: axis_x, y: axis_y, z: axis_z };
-
+            
+            // Extracting joint limits
             let limit_lower: f64 = node
                                     .children()
                                     .find(|n| n.tag_name().name() == "limit")
