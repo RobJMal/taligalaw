@@ -13,6 +13,26 @@ pub struct Quaternion {
     pub w: f64,
 }
 
+impl Quaternion {
+    pub fn identity () -> Quaternion {
+        Quaternion { 
+            x: 0.0, 
+            y: 0.0, 
+            z: 0.0, 
+            w: 1.0, 
+        }
+    }
+
+    pub fn multiply(&self, other: &Quaternion) -> Quaternion {
+        Quaternion { 
+            x: self.w*other.x + self.x*other.w + self.y*other.z - self.z*other.y,
+            y: self.w*other.y - self.x*other.z + self.y*other.w + self.z*other.x,
+            z: self.w*other.z + self.x*other.y - self.y*other.x + self.z*other.w,
+            w: self.w*other.w - self.x*other.x - self.y*other.y - self.z*other.z,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct EulerRPY {
     pub roll: f64,
@@ -87,5 +107,38 @@ mod tests {
             assert!(q.z.abs() < 1e-10);
         }
 
+    }
+
+    mod quaternion_tests {
+        use super::Quaternion;
+
+        #[test]
+        fn test_identity_multiply () {
+            let quat_01: Quaternion = Quaternion { x: 0.5, y: 0.5, z: 0.5, w: 0.5 };
+            let result: Quaternion = Quaternion::identity().multiply(&quat_01);
+
+            assert!((result.x - quat_01.x).abs() < 1e-10);
+            assert!((result.y - quat_01.y).abs() < 1e-10);
+            assert!((result.z - quat_01.z).abs() < 1e-10);
+            assert!((result.w - quat_01.w).abs() < 1e-10);
+        }
+
+        #[test]
+        fn test_compose_two_90_deg_rotations() {
+            use std::f64::consts::PI;
+
+            let q90z: Quaternion = Quaternion { 
+                w: (PI/4.0).cos(), 
+                x: 0.0, 
+                y: 0.0, 
+                z: (PI/4.0).sin(),
+            };
+            let q180z: Quaternion = q90z.multiply(&q90z);
+
+            assert!(q180z.x.abs() < 1e-10);
+            assert!(q180z.y.abs() < 1e-10);
+            assert!((q180z.z - 1.0).abs() < 1e-10);
+            assert!(q180z.w.abs() < 1e-10);
+        }
     }
 }
