@@ -66,6 +66,15 @@ pub struct Transform {
     pub orientation: Quaternion,
 }
 
+impl Transform {
+    pub fn identity() -> Transform {
+        Transform { 
+            position: Position3D { x: 0.0, y: 0.0, z: 0.0 }, 
+            orientation: Quaternion { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Link {
     pub name: String,
