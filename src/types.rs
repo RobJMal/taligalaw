@@ -28,6 +28,18 @@ impl Quaternion {
         Quaternion { x: -self.x, y: -self.y, z: -self.z, w: self.w }
     }
 
+    pub fn inverse(&self) -> Quaternion {
+        let sq_norm = self.x.powi(2) + self.y.powi(2) + self.z.powi(2) + self.w.powi(2);
+        let q_conj = self.conj();
+
+        Quaternion { 
+            x: q_conj.x / sq_norm, 
+            y: q_conj.y / sq_norm, 
+            z: q_conj.z / sq_norm, 
+            w: q_conj.w / sq_norm, 
+        }
+    }
+
     pub fn normalize(&self) -> Quaternion {
         let magnitude = f64::sqrt(self.x.powi(2) + self.y.powi(2) + self.z.powi(2) + self.w.powi(2));
 
@@ -137,6 +149,8 @@ mod tests {
     mod quaternion_tests {
         use super::Quaternion;
 
+        const TEST_TOLERANCE: f64 = 1e-10;
+
         #[test]
         fn test_identity_multiply () {
             let quat_01: Quaternion = Quaternion { x: 0.5, y: 0.5, z: 0.5, w: 0.5 };
@@ -198,6 +212,26 @@ mod tests {
 
             // Property 02: Real part is equal to the squared norm
             assert!((q2.w - q1_sq_norm).abs() < 1e-10, "W component of Quaternion doesn't equal squred norm");
+        }
+
+        #[test]
+        fn test_inverse() {
+            let q1 = Quaternion { x: 0.4, y: -0.3, z: 0.2, w: 0.1};
+            let q1_inv = q1.inverse();
+            
+            // Test 01: right inverse (q * q^-1 = 1)
+            let right_result = q1.multiply(&q1_inv);
+            assert!((right_result.x).abs() < TEST_TOLERANCE);
+            assert!((right_result.y).abs() < TEST_TOLERANCE);
+            assert!((right_result.z).abs() < TEST_TOLERANCE);
+            assert!((right_result.w - 1.0).abs() < TEST_TOLERANCE, "Right inverse failed");
+
+            // Test 02: left inverse (q^-1 * q = 1)
+            let left_result = q1_inv.multiply(&q1);
+            assert!((left_result.x).abs() < TEST_TOLERANCE);
+            assert!((left_result.y).abs() < TEST_TOLERANCE);
+            assert!((left_result.z).abs() < TEST_TOLERANCE);
+            assert!((left_result.w - 1.0).abs() < TEST_TOLERANCE, "Left inverse failed");
         }
     }
 }
