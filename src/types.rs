@@ -1,11 +1,13 @@
-#[derive(Debug)]
+use derive_more::Add;
+
+#[derive(Debug, Add, Clone, Copy)]
 pub struct Position3D {
     pub x: f64,
     pub y: f64,
     pub z: f64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub struct Quaternion {
     pub x: f64,
     pub y: f64,
@@ -103,7 +105,7 @@ impl Transform {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Link {
     pub name: String,
 }
