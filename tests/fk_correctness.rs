@@ -1,5 +1,5 @@
 // Third-party
-use rand::{Rng, RngExt, SeedableRng};
+use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 // Custom 
@@ -72,9 +72,14 @@ fn test_zero_cmd() -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn test_random_joint_cmds () -> Result<(), Box<dyn  std::error::Error>> {
+    let model = load_urdf("assets/simple_robot.urdf")?;
     let mut rng = ChaCha8Rng::seed_from_u64(RNG_SEED);
+
     for _ in 0..128 {
-        let joint_cmds: Vec<f64> = (0..2).map(|_| rng.random_range(-1.5..1.5)).collect();
+        let joint_cmds: Vec<f64> = model.joints
+            .iter()
+            .map(|j| rng.random_range(j.limit_lower..j.limit_upper))
+            .collect();
         assert_tg_fk_matches_k(&joint_cmds)?;
     }
 
