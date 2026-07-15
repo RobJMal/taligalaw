@@ -19,7 +19,9 @@ use std::fs;
 use std::path::PathBuf;
 
 use charming::component::{Axis, Legend, Title};
-use charming::element::{AreaStyle, AxisType, ItemStyle, Label, LabelPosition, LineStyle};
+use charming::element::{
+    AreaStyle, AxisType, ItemStyle, Label, LabelPosition, LineStyle, NameLocation,
+};
 use charming::series::Line;
 use charming::{Chart, ImageFormat, ImageRenderer};
 
@@ -99,13 +101,22 @@ fn build_chart(
             Axis::new()
                 .type_(AxisType::Category)
                 .name("Degrees of freedom (joints)")
+                .name_location(NameLocation::Middle) // centered under the axis, not clipped at the end
+                .name_gap(32.0)
                 .data(dof_labels),
         )
-        .y_axis(Axis::new().type_(AxisType::Value).name(y_name));
+        .y_axis(
+            Axis::new()
+                .type_(AxisType::Value)
+                .name(y_name)
+                .name_location(NameLocation::Middle) // centered & auto-rotated along the axis
+                .name_gap(50.0) // clears the tick numbers
+                .min(0.0), // zero baseline; ECharts auto-picks a clean max
+        );
 
     for (i, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
-        // Separate the two series' labels vertically: galaw's number sits above
-        // its line, k's below — so they never overlap even when the lines are close.
+        // galaw's label sits above its line, k's below — so the two near-identical
+        // series never stack their boxes on top of each other.
         let label_pos = if i == 0 { LabelPosition::Top } else { LabelPosition::Bottom };
         let (mut means, mut los, mut heights) = (Vec::new(), Vec::new(), Vec::new());
         for &(group, _, dof) in ROBOTS {
@@ -142,8 +153,8 @@ fn build_chart(
                 .label(
                     Label::new()
                         .show(true)
-                        .position(label_pos)
-                        .distance(8.0) // gap between the point and the box
+                        .position(label_pos) // galaw above its line, k below
+                        .distance(6.0) // gap between the point and the box
                         .color(color) // text in the line's color
                         .background_color("#ffffff") // white box fill
                         .border_color(color) // box outline in the line's color
