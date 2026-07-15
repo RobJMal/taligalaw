@@ -28,26 +28,22 @@ fn to_quaternion(q: k::nalgebra::Quaternion<f64>) -> Quaternion {
     Quaternion { x: q.i, y: q.j, z: q.k, w: q.w }
 }
 
-
-
-#[test]
-fn test_zero_cmd() -> Result<(), Box<dyn std::error::Error>> {
+fn assert_tg_fk_matches_k(joint_cmd: &[f64]) -> Result<(), Box<dyn std::error::Error>> {
     let urdf_file_path: String = String::from("assets/simple_robot.urdf");
 
-    // Robot models
+    // Robot models, with k being the ground truth
     let tg_robot_model = load_urdf(&urdf_file_path).unwrap();
-    let k_chain = k::Chain::<f64>::from_urdf_file(&urdf_file_path).unwrap();
+    let k_chain = k::Chain::<f64>::from_urdf_file(&urdf_file_path).unwrap(); 
 
-    // Test input
-    let joint_cmd = [0.0, 0.0];
-
-    let tg_result = tg_robot_model.compute_fk(&joint_cmd)?;
-    let _  = k_chain.set_joint_positions(&joint_cmd);
-    let _ = k_chain.update_transforms();
+    let tg_result = tg_robot_model.compute_fk(joint_cmd)?;
+    k_chain.set_joint_positions(joint_cmd)?;
+    k_chain.update_transforms();
 
     for link in tg_robot_model.links.iter() {
         let tg_link = &tg_result[link];
-        let k_link = k_chain.find_link(&link.name).unwrap().world_transform().ok_or("invalid result")?;
+        let k_link = k_chain
+            .find_link(&link.name).unwrap()
+            .world_transform().ok_or("invalid result")?;
 
         assert_position3d_close(&tg_link.position, &to_position3d(&k_link.translation));
         assert_orientation_close(&tg_link.orientation, &to_quaternion(*k_link.rotation.quaternion()));
@@ -56,3 +52,28 @@ fn test_zero_cmd() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+
+#[test]
+fn test_zero_cmd() -> Result<(), Box<dyn std::error::Error>> {
+    assert_tg_fk_matches_k(&[0.0, 0.0])
+}
+
+#[test]
+fn test_shoulder_joint_cmd() -> Result<(), Box<dyn std::error::Error>> {
+    let joint_cmd_01: [f64; 2] = [std::f64::consts::FRAC_PI_4, 0.0];
+    let joint_cmd_02: [f64; 2] = [-std::f64::consts::FRAC_PI_4, 0.0];
+    assert_tg_fk_matches_k(&joint_cmd_01);
+    assert_tg_fk_matches_k(&joint_cmd_02)
+}
+
+#[test]
+fn test_elbow_joint_cmd() -> Result<(), Box<dyn  std::error::Error>> {
+    let joint_cmd_01: [f64; 2] = [0.0, std::f64::consts::FRAC_PI_4];
+    let joint_cmd_02: [f64; 2] = [0.0, -std::f64::consts::FRAC_PI_4];
+    assert_tg_fk_matches_k(&joint_cmd_01);
+    assert_tg_fk_matches_k(&joint_cmd_02)
+}
+
+// Test both rotations
+
+// Test at joint limit
