@@ -18,6 +18,16 @@ fn assert_position3d_close(a: &Position3D, b: &Position3D) {
     assert_close(a.z, b.z);
 }
 
+/// Converts to Position3D 
+fn to_position3d(t: &k::nalgebra::Translation3<f64>) -> Position3D {
+    Position3D { x: t.x, y: t.y, z: t.z }
+}
+
+/// Converts to Quaternion
+fn to_quaternion(q: k::nalgebra::Quaternion<f64>) -> Quaternion {
+    Quaternion { x: q.i, y: q.j, z: q.k, w: q.w }
+}
+
 
 
 #[test]
@@ -38,20 +48,9 @@ fn test_zero_cmd() -> Result<(), Box<dyn std::error::Error>> {
     for link in tg_robot_model.links.iter() {
         let tg_link = &tg_result[link];
         let k_link = k_chain.find_link(&link.name).unwrap().world_transform().ok_or("invalid result")?;
-        let k_link_position = Position3D {
-            x: k_link.translation.x, 
-            y: k_link.translation.y, 
-            z: k_link.translation.z
-        };
-        let k_link_orientation = types::Quaternion {
-            x: k_link.rotation.i,
-            y: k_link.rotation.j,
-            z: k_link.rotation.k,
-            w: k_link.rotation.w,
-        };
 
-        assert_position3d_close(&tg_link.position, &k_link_position);
-        assert_orientation_close(&tg_link.orientation, &k_link_orientation);
+        assert_position3d_close(&tg_link.position, &to_position3d(&k_link.translation));
+        assert_orientation_close(&tg_link.orientation, &to_quaternion(*k_link.rotation.quaternion()));
     }
 
     Ok(())
