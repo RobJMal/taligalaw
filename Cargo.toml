@@ -14,3 +14,7 @@ rand = "0.10.2"
 rand_chacha = "0.10.0"
 sysinfo = "0.39.6"
 
+[[bench]]
+name = "fk_speed"
+harness = false
+
