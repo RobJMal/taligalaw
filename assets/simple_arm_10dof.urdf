@@ -4,7 +4,7 @@
   Same parser constraints as arm_6dof.urdf: all revolute, every joint has
   origin(xyz+rpy) + axis + limit, links in kinematic-chain order (base first).
 -->
-<robot name="arm_10dof">
+<robot name="simple_arm_10dof">
 
   <material name="grey">
     <color rgba="0.4 0.4 0.4 1.0"/>

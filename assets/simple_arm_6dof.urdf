@@ -6,7 +6,7 @@
   kinematic-chain order (base first), which galaw's compute_fk assumes.
   Axes alternate to keep FK non-trivial (not a degenerate single-axis chain).
 -->
-<robot name="arm_6dof">
+<robot name="simple_arm_6dof">
 
   <material name="grey">
     <color rgba="0.4 0.4 0.4 1.0"/>
