@@ -1,6 +1,5 @@
 use nalgebra::{Isometry3, Unit, Vector3};
 
-
 #[derive(Debug, Hash, PartialEq, Eq, Clone)]
 pub struct Link {
     pub name: String,

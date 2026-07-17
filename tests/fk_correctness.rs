@@ -7,10 +7,7 @@ use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 // Custom
-use galaw::{
-    load_urdf,
-    types::{RobotModel},
-};
+use galaw::{load_urdf, types::RobotModel};
 
 // TYPES
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -18,7 +15,7 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 // CONSTANTS
 const TEST_TOLERANCE: f64 = 1e-10;
 const RNG_SEED: u64 = 42;
-const NUM_POSES: usize = 128;   // Number of random robot poses to test out
+const NUM_POSES: usize = 128; // Number of random robot poses to test out
 
 // HELPERS
 fn assert_close(a: f64, b: f64) {
@@ -42,10 +39,7 @@ fn assert_position3d_close(a: &Translation3<f64>, b: &Translation3<f64>) {
 
 fn assert_transform_close(galaw_transform: &Isometry3<f64>, k_iso: &k::nalgebra::Isometry3<f64>) {
     assert_position3d_close(&galaw_transform.translation, &k_iso.translation);
-    assert_orientation_close(
-        &galaw_transform.rotation,
-        &k_iso.rotation,
-    );
+    assert_orientation_close(&galaw_transform.rotation, &k_iso.rotation);
 }
 
 fn assert_galaw_fk_matches_k(

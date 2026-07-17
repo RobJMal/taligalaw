@@ -7,7 +7,6 @@ use nalgebra::{Isometry3, Translation3, Unit, UnitQuaternion, Vector3};
 use crate::types::{Joint, Link, RobotModel};
 use crate::utils::parse_vec3_str;
 
-
 pub fn load_urdf(urdf_path: &str) -> Result<RobotModel, Box<dyn std::error::Error>> {
     let content: String = fs::read_to_string(urdf_path)?;
     let doc = roxmltree::Document::parse(&content)?;

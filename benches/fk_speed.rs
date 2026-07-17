@@ -1,14 +1,13 @@
-use std::fs;
-use std::hint::black_box;   // Prevents compiler from optimizing away code since we're benchmarking ("be pessimistic")
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use galaw::load_urdf;
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
+use std::fs;
+use std::hint::black_box; // Prevents compiler from optimizing away code since we're benchmarking ("be pessimistic")
 use sysinfo::System;
-use galaw::load_urdf;
-
 
 const RNG_SEED: u64 = 42;
-const N_POSES: usize = 100;    // Random poses per robot
+const N_POSES: usize = 100; // Random poses per robot
 
 // Robot embodiments to test
 const URDFS: &[&str] = &[
@@ -16,7 +15,6 @@ const URDFS: &[&str] = &[
     "assets/simple_arm_6dof.urdf",
     "assets/simple_arm_10dof.urdf",
 ];
-
 
 /// Collects host/OS/CPU/memory info into a printable block, so benchmark
 /// numbers can be reproduced on (or compared against) other machines.
@@ -53,7 +51,6 @@ fn system_specs() -> String {
     )
 }
 
-
 fn bench_fk(c: &mut Criterion) {
     // Capture machine context once, up front (not timed).
     let specs = system_specs();
@@ -72,7 +69,7 @@ fn bench_fk(c: &mut Criterion) {
         let galaw_model = load_urdf(urdf_path).unwrap();
         let k_chain = k::Chain::<f64>::from_urdf_file(urdf_path).unwrap();
 
-        // Generate commands 
+        // Generate commands
         let mut rng = ChaCha8Rng::seed_from_u64(RNG_SEED);
         let joint_cmds: Vec<Vec<f64>> = (0..N_POSES)
             .map(|_| {
@@ -83,7 +80,6 @@ fn bench_fk(c: &mut Criterion) {
                     .collect()
             })
             .collect();
-        
 
         // Group makes galaw vs k show up side-by-side
         let mut group = c.benchmark_group(format!("fk/{}", galaw_model.name));
@@ -91,22 +87,22 @@ fn bench_fk(c: &mut Criterion) {
 
         // ----- galaw -----
         group.bench_with_input(
-            BenchmarkId::new("galaw", galaw_model.joints.len()), 
-            &joint_cmds, 
+            BenchmarkId::new("galaw", galaw_model.joints.len()),
+            &joint_cmds,
             |b, cmds| {
                 b.iter(|| {
                     for cmd in cmds {
                         let out = galaw_model.compute_fk(black_box(cmd)).unwrap();
                         black_box(out);
-                    } 
+                    }
                 });
-            }
+            },
         );
 
         // ----- k -----
         group.bench_with_input(
-            BenchmarkId::new("k", galaw_model.joints.len()), 
-            &joint_cmds, 
+            BenchmarkId::new("k", galaw_model.joints.len()),
+            &joint_cmds,
             |b, cmds| {
                 b.iter(|| {
                     for cmd in cmds {
@@ -118,9 +114,8 @@ fn bench_fk(c: &mut Criterion) {
         );
 
         group.finish();
-
     }
-} 
+}
 
 criterion_group!(benches, bench_fk);
 criterion_main!(benches);
