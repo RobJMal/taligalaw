@@ -7,7 +7,7 @@ use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 // Custom
-use galaw::{load_urdf, types::RobotModel};
+use galaw::{load_urdf, types::GalawModel};
 
 // TYPES
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -43,7 +43,7 @@ fn assert_transform_close(galaw_transform: &Isometry3<f64>, k_iso: &k::nalgebra:
 }
 
 fn assert_galaw_fk_matches_k(
-    galaw_model: &RobotModel,
+    galaw_model: &GalawModel,
     k_chain: &k::Chain<f64>,
     joint_cmd: &[f64],
 ) -> TestResult {
@@ -67,7 +67,7 @@ fn assert_galaw_fk_matches_k(
 }
 
 /// Because k_chain is stateful, cannot have it easily parallized and need to instantiate it for each test
-fn setup_kinematic_models(urdf_path: &str) -> (RobotModel, k::Chain<f64>) {
+fn setup_kinematic_models(urdf_path: &str) -> (GalawModel, k::Chain<f64>) {
     let galaw_robot_model = load_urdf(urdf_path).unwrap();
     let k_chain = k::Chain::<f64>::from_urdf_file(urdf_path).unwrap();
     (galaw_robot_model, k_chain)

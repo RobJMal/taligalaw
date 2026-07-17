@@ -17,7 +17,7 @@ pub struct Joint {
 }
 
 #[derive(Debug)]
-pub struct RobotModel {
+pub struct GalawModel {
     pub name: String,
     pub links: Vec<Link>,
     pub joints: Vec<Joint>,

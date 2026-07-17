@@ -1,8 +1,8 @@
 use k::{Isometry3, Translation3, UnitQuaternion};
 
-use crate::types::RobotModel;
+use crate::types::GalawModel;
 
-impl RobotModel {
+impl GalawModel {
     /// Computes forward kinematics of a model
     pub fn compute_fk(
         &self,

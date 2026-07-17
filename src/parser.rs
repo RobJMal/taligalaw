@@ -4,10 +4,10 @@ use std::fs;
 use nalgebra::{Isometry3, Translation3, Unit, UnitQuaternion, Vector3};
 
 // Custom
-use crate::types::{Joint, Link, RobotModel};
+use crate::types::{Joint, Link, GalawModel};
 use crate::utils::parse_vec3_str;
 
-pub fn load_urdf(urdf_path: &str) -> Result<RobotModel, Box<dyn std::error::Error>> {
+pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Error>> {
     let content: String = fs::read_to_string(urdf_path)?;
     let doc = roxmltree::Document::parse(&content)?;
 
@@ -102,7 +102,7 @@ pub fn load_urdf(urdf_path: &str) -> Result<RobotModel, Box<dyn std::error::Erro
         }
     }
 
-    Ok(RobotModel {
+    Ok(GalawModel {
         name: robot_name,
         links: links,
         joints: joints,
