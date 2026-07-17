@@ -1,8 +1,8 @@
-use k::{Isometry3, Translation3, UnitQuaternion};
-use nalgebra::Quaternion;
 /// Tests the correctness of the implmeented forward kinematics function
 /// with Rust's k library
+
 // Third-party
+use nalgebra::{Isometry3, Translation3, UnitQuaternion};
 use rand::{RngExt, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
