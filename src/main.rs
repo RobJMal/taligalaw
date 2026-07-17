@@ -13,11 +13,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     for joint in galaw_model.joints.iter() {
-        println!("Joint: {:?}", joint.name);
+        let look_up = galaw_model.get_joint_idx(&joint.name);
+        println!("Joint: {:?} -> cmd_idx {} (lookup: {:?})", joint.name, joint.cmd_idx, look_up);
     }
 
-    // Test commands
-    let joint_cmds = [0.0, 0.0];
+    // Building joint_cmd
+    let mut joint_cmds = vec![0.0; galaw_model.joints.iter().len()];
+    let shoulder_joint_idx = galaw_model.get_joint_idx("shoulder_joint").ok_or("no shoulder_joint")?;
+    let elbow_joint_idx = galaw_model.get_joint_idx("elbow_joint").ok_or("no elbow_joint")?;
+    joint_cmds[shoulder_joint_idx] = 0.5;
+    joint_cmds[elbow_joint_idx] = -0.3;
 
     // Demo with galaw compute_fk
     match galaw_model.compute_fk(&joint_cmds) {
