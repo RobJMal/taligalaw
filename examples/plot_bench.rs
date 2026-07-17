@@ -35,6 +35,7 @@ const ROBOTS: &[(&str, &str, u32)] = &[
     ("fk_simple_arm", "simple_arm", 2),
     ("fk_simple_arm_6dof", "simple_arm_6dof", 6),
     ("fk_simple_arm_10dof", "simple_arm_10dof", 10),
+    ("fk_simple_arm_20dof", "simple_arm_20dof", 20),
 ];
 
 const IMPLS: [&str; 2] = ["galaw", "k"];
@@ -63,12 +64,18 @@ fn stat(group: &str, impl_: &str, dof: u32) -> Result<Stat, Box<dyn Error>> {
         .join("new/estimates.json");
 
     let text = fs::read_to_string(&path).map_err(|e| {
-        format!("could not read {} (run `cargo bench` first): {e}", path.display())
+        format!(
+            "could not read {} (run `cargo bench` first): {e}",
+            path.display()
+        )
     })?;
     let v: serde_json::Value = serde_json::from_str(&text)?;
     let mean = &v["mean"];
     let field = |ptr: &serde_json::Value, key: &str| -> Result<f64, Box<dyn Error>> {
-        Ok(ptr[key].as_f64().ok_or_else(|| format!("estimates.json: missing {key}"))? / N_POSES)
+        Ok(ptr[key]
+            .as_f64()
+            .ok_or_else(|| format!("estimates.json: missing {key}"))?
+            / N_POSES)
     };
 
     // estimates.json: { "mean": { "point_estimate": <ns/iter>,
@@ -117,7 +124,11 @@ fn build_chart(
     for (i, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
         // galaw's label sits above its line, k's below — so the two near-identical
         // series never stack their boxes on top of each other.
-        let label_pos = if i == 0 { LabelPosition::Top } else { LabelPosition::Bottom };
+        let label_pos = if i == 0 {
+            LabelPosition::Top
+        } else {
+            LabelPosition::Bottom
+        };
         let (mut means, mut los, mut heights) = (Vec::new(), Vec::new(), Vec::new());
         for &(group, _, dof) in ROBOTS {
             let (m, lo, hi) = to_vals(&stat(group, impl_, dof)?);
@@ -180,7 +191,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         |x| x.round(),
     )?;
     let p1 = out.join("scaling_ns_per_call.png");
-    renderer.save_format(ImageFormat::Png, &latency, p1.to_str().ok_or("non-utf8 path")?)?;
+    renderer.save_format(
+        ImageFormat::Png,
+        &latency,
+        p1.to_str().ok_or("non-utf8 path")?,
+    )?;
     println!("wrote {}", p1.display());
 
     // Throughput: M calls/sec = 1e9 / ns / 1e6. Decreasing in ns, so lo/hi swap.
@@ -192,7 +207,11 @@ fn main() -> Result<(), Box<dyn Error>> {
         |x| (x * 100.0).round() / 100.0,
     )?;
     let p2 = out.join("throughput_mcalls.png");
-    renderer.save_format(ImageFormat::Png, &throughput, p2.to_str().ok_or("non-utf8 path")?)?;
+    renderer.save_format(
+        ImageFormat::Png,
+        &throughput,
+        p2.to_str().ok_or("non-utf8 path")?,
+    )?;
     println!("wrote {}", p2.display());
 
     Ok(())
