@@ -1,4 +1,4 @@
-use k::{Isometry3, Translation3, UnitQuaternion};
+use nalgebra::{Isometry3, Translation3, UnitQuaternion};
 
 use crate::types::GalawModel;
 
