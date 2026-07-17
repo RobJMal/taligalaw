@@ -14,13 +14,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     for joint in galaw_model.joints.iter() {
         let look_up = galaw_model.get_joint_idx(&joint.name);
-        println!("Joint: {:?} -> cmd_idx {} (lookup: {:?})", joint.name, joint.cmd_idx, look_up);
+        println!(
+            "Joint: {:?} -> cmd_idx {} (lookup: {:?})",
+            joint.name, joint.cmd_idx, look_up
+        );
     }
 
     // Building joint_cmd
     let mut joint_cmds = vec![0.0; galaw_model.joints.iter().len()];
-    let shoulder_joint_idx = galaw_model.get_joint_idx("shoulder_joint").ok_or("no shoulder_joint")?;
-    let elbow_joint_idx = galaw_model.get_joint_idx("elbow_joint").ok_or("no elbow_joint")?;
+    let shoulder_joint_idx = galaw_model
+        .get_joint_idx("shoulder_joint")
+        .ok_or("no shoulder_joint")?;
+    let elbow_joint_idx = galaw_model
+        .get_joint_idx("elbow_joint")
+        .ok_or("no elbow_joint")?;
     joint_cmds[shoulder_joint_idx] = 0.5;
     joint_cmds[elbow_joint_idx] = -0.3;
 
@@ -30,6 +37,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (i, link) in galaw_model.links.iter().enumerate() {
                 println!("{:?}, {:?}", link, links[i])
             }
+            // Look up a specific link's pose by name, not by assumed position
+            let forearm_idx = galaw_model
+                .get_link_idx("forearm")
+                .ok_or("no forearm link")?;
+            println!("forearm pose (via get_link_idx): {:?}", links[forearm_idx]);
         }
         Err(e) => eprintln!("Error: {}", e),
     };

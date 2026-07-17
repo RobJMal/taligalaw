@@ -26,10 +26,15 @@ pub struct GalawModel {
     pub name: String,
     pub links: Vec<Link>,
     pub joints: Vec<Joint>,
+    pub link_name_to_idx: HashMap<String, usize>,
     pub joint_name_to_idx: HashMap<String, usize>,
 }
 
 impl GalawModel {
+    pub fn get_link_idx(&self, name: &str) -> Option<usize> {
+        self.link_name_to_idx.get(name).copied()
+    }
+
     pub fn get_joint_idx(&self, name: &str) -> Option<usize> {
         self.joint_name_to_idx.get(name).copied()
     }
