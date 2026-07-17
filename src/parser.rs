@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 
 // Third-party
@@ -92,19 +93,62 @@ pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Erro
             let joint: Joint = Joint {
                 name,
                 parent,
+                parent_link_idx: 0, // Dummy as it will be handled in next lines
                 child,
+                child_link_idx: 1,  // Dummy as it will be handled in next lines
                 transform,
                 axis,
                 limit_lower,
                 limit_upper,
+                cmd_idx: joints.len(),
             };
             joints.push(joint);
         }
     }
 
+    // Enforcing order to ensure indexing is accurate
+    let link_index: HashMap<&str, usize> = 
+        links.iter().enumerate().map(|(i, l)| (l.name.as_str(), i)).collect();
+
+    // Find the root 
+    let child_names: HashSet<&str> = joints.iter().map(|j| j.child.as_str()).collect();
+    let root_candidates: Vec<usize> = links.iter().enumerate()
+        .filter(|(_, l)| !child_names.contains(l.name.as_str()))
+        .map(|(i, _)| i)
+        .collect();
+    let root_index = match root_candidates.as_slice() {
+        [single] => *single,
+        [] => return Err("no root link found - every link has a parent (cycle in URDF?)".into()),
+        _ => {
+            let names: Vec<&str> = root_candidates.iter().map(|&i| links[i].name.as_str()).collect();
+            return Err(format!("multiple root-like links with no parent: {:?} - URDF may be disconnected", names).into());
+        }
+    };
+
+    let mut ordered_joints: Vec<Joint> = Vec::with_capacity(joints.len());
+    let mut queue: VecDeque<usize> = VecDeque::from([root_index]);
+    while let Some(parent_idx) = queue.pop_front() {
+        for j in joints.iter().filter(|j| link_index[j.parent.as_str()] == parent_idx) {
+            let child_idx = link_index[j.child.as_str()];
+            let mut resolved = j.clone();
+            resolved.parent_link_idx = parent_idx;
+            resolved.child_link_idx = child_idx;
+            ordered_joints.push(resolved);
+            queue.push_back(child_idx);
+        }
+    }
+
+    if ordered_joints.len() != joints.len() {
+        return Err("some joints are unreachable from root link (disconnected or cyclic URDF)".into());
+    }
+
+    let joint_name_to_idx: HashMap<String, usize> =
+        ordered_joints.iter().map(|j| (j.name.clone(), j.cmd_idx)).collect();
+
     Ok(GalawModel {
         name: robot_name,
         links: links,
-        joints: joints,
+        joints: ordered_joints,
+        joint_name_to_idx: joint_name_to_idx,
     })
 }
