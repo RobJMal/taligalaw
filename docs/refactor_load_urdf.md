@@ -8,27 +8,45 @@ User confirmed scope: add support for **revolute, continuous, prismatic, and fix
 
 ## Design
 
-### 1. `src/types.rs` — replace parallel `Option`s with an enum
+### 1. `src/types.rs` — a plain type tag + a flat, branch-free motion representation
+
+Revolute/continuous/prismatic/fixed are all specializations of one rigid-body motion (a rotation part and a translation part where only one is ever nonzero); `Joint` stores that motion as flat vectors instead of an enum-with-data, so `compute_fk`'s hot loop never has to match on joint type per iteration:
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum JointKinematics {
-    Rotational { axis: Unit<Vector3<f64>>, limits: Option<(f64, f64)> }, // revolute (Some) or continuous (None)
-    Prismatic  { axis: Unit<Vector3<f64>>, limits: Option<(f64, f64)> },
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JointType {
+    Revolute,
+    Continuous,
+    Prismatic,
     Fixed,
+}
+
+pub struct Joint {
+    pub name: String,
+    pub parent: String,
+    pub parent_link_idx: usize,
+    pub child: String,
+    pub child_link_idx: usize,
+    pub transform: Isometry3<f64>,
+    pub joint_type: JointType,       // metadata only — compute_fk doesn't match on this
+    pub rot_axis: Vector3<f64>,      // unit axis for Revolute/Continuous, else Vector3::zeros()
+    pub lin_axis: Vector3<f64>,      // unit axis for Prismatic, else Vector3::zeros()
+    pub limits: Option<(f64, f64)>,  // Some for revolute/prismatic, None for continuous/fixed — used only by test/bench command sampling, not by compute_fk
+    pub cmd_idx: Option<usize>,
 }
 ```
 
-- `Joint` drops `axis`/`limit_lower`/`limit_upper` in favor of a single `kinematics: JointKinematics` field — this rules out illegal states (e.g. `Fixed` with an axis) at compile time instead of via convention. This mirrors `k`'s own `JointType` design (it also collapses revolute/continuous into one `Rotational{axis}` variant distinguished only by an optional limit) — useful precedent since we cross-validate against `k` directly in tests.
+- `joint_type` is a plain tag (no associated data) kept for parser error messages and introspection; `compute_fk` never reads it. `rot_axis`/`lin_axis` are the two motion generators — exactly one is nonzero per joint (both are zero for `Fixed`), derived once during parsing from the `type` attribute + `<axis>`.
 - `cmd_idx: usize` → `cmd_idx: Option<usize>` — `Fixed` joints have 0 DOF and must not consume a slot in `joint_cmds` (matches how `k::Chain::dof()`/`movable_nodes` already exclude `Fixed`).
 - Add `GalawModel::num_actuated_joints(&self) -> usize` (count of `cmd_idx.is_some()`), used to size `joint_cmds` and in `compute_fk`'s length check.
 - `joint_name_to_idx` (built in parser.rs) is populated via `filter_map` over joints with `cmd_idx.is_some()`, so `get_joint_idx("some_fixed_joint")` naturally returns `None` — no change needed to the accessor itself, just what gets inserted.
+- Trade-off: `Joint` carries two `Vector3<f64>` (48 bytes) instead of one `Option<Unit<Vector3<f64>>>` — more memory per joint, but for robot-scale joint counts (tens, maybe low hundreds) that's a good trade for removing branch-predictor pressure from `compute_fk`'s loop.
 
 ### 2. `src/parser.rs` — split `load_urdf`, fix ordering, support all 4 types
 
 Split the current 170-line function into:
 - **`parse_link(node) -> Result<Link, _>`**
-- **`parse_joint(node) -> Result<Joint, _>`** — reads the `type` attribute and maps it: `revolute`/`continuous` → `Rotational` (limits `Some` for revolute, `None` for continuous — regardless of whether a `<limit>` tag with only `effort`/`velocity` is present), `prismatic` → `Prismatic` (limits required), `fixed` → `Fixed` (no axis/limit read at all). Any other value (`floating`, `planar`, `spherical` — the remaining URDF spec types) is a clear error naming all three as unsupported. Also makes `<origin>` default to identity and `<axis>` default to `(1,0,0)` when omitted, per URDF spec — both are commonly omitted in real files, and requiring them today would fail on well-formed real URDFs.
+- **`parse_joint(node) -> Result<Joint, _>`** — reads the `type` attribute and, based on it, populates `rot_axis`/`lin_axis`/`limits` directly: `revolute`/`continuous` → axis goes into `rot_axis` (`lin_axis` stays zero), `limits` is `Some` for revolute, `None` for continuous (regardless of whether a `<limit>` tag with only `effort`/`velocity` is present); `prismatic` → axis goes into `lin_axis` (`rot_axis` stays zero), `limits` required; `fixed` → both axes stay `Vector3::zeros()`, `limits` is `None`, no axis/limit element read at all. Any other `type` value (`floating`, `planar`, `spherical` — the remaining URDF spec types) is a clear error naming all three as unsupported. Also makes `<origin>` default to identity and `<axis>` default to `(1,0,0)` when omitted, per URDF spec — both are commonly omitted in real files, and requiring them today would fail on well-formed real URDFs.
 - **`resolve_joint_order(links, joints) -> Result<Vec<Joint>, _>`** — root-finding (logic unchanged) + build an adjacency map `HashMap<usize, Vec<usize>>` from `parent_link_idx` → joint indices **in file-declaration order** (built once, O(E); confirmed this matches how `k` itself builds its tree — it iterates `robot.joints` in file order per parent) + a **recursive DFS pre-order** walk (not the current BFS) assigning `cmd_idx = Some(counter)` to non-`Fixed` joints as they're visited, `None` to `Fixed`. Recursion depth is bounded by robot depth (never realistically more than a few dozen), so no stack-depth concern. This replaces the current O(V·E) re-filter-per-pop traversal with O(V+E) and — critically — makes galaw's joint order match `k`'s, so `joint_cmds` built by iterating `model.joints` positionally (as `main.rs`/tests/benches already do) lines up correctly for branching robots, not just chains.
 - `load_urdf` becomes a short orchestrator: parse XML → collect links/joints via the two parse functions → `resolve_joint_order` → build `link_name_to_idx`/`joint_name_to_idx` → construct `GalawModel`.
 
@@ -38,18 +56,37 @@ Split the current 170-line function into:
 - `<mimic>` is not read/honored. Confirmed `k` itself still gives a mimicked joint a real `Rotational`/`Prismatic` type (it still consumes a DOF slot) — so an unhandled `<mimic>` joint parses and runs fine under this design, it's just controlled independently rather than slaved to its driving joint. `<safety_controller>`/`<calibration>` are metadata-only (confirmed `k` never reads them either) — safe to silently ignore.
 - No cycle detection in `resolve_joint_order`. A malformed URDF where a link is the `child` of two different joints (not a valid tree) could in principle cause unbounded recursion — this is a pre-existing gap (the old BFS had the same non-termination risk), not something introduced by this change, and out of scope for "support real, well-formed robot URDFs."
 
-### 3. `src/kinematics.rs` — branch on joint kinematics
+### 3. `src/kinematics.rs` — branch-free hot loop
 
-`compute_fk`'s length check uses `self.num_actuated_joints()` instead of `self.joints.len()`. The per-joint loop matches on `joint.kinematics`:
-- `Fixed` → `joint_local = joint.transform` (no command consumed)
-- `Rotational { axis, .. }` → existing rotation-via-axis-angle logic, reading `joint_cmds[joint.cmd_idx.unwrap()]`
-- `Prismatic { axis, .. }` → translation along `axis` scaled by the command value, using `Isometry3::from_parts(Translation3::from(axis.into_inner() * cmd), UnitQuaternion::identity())`, instead of rotation
+`compute_fk`'s length check uses `self.num_actuated_joints()` instead of `self.joints.len()`. Before the loop, scatter the caller's `joint_cmds` into a dense, per-joint array sized `self.joints.len()`, defaulting slots with `cmd_idx: None` (i.e. `Fixed` joints) to `0.0` — this is the only place `cmd_idx` is consulted, and it's a one-time O(n) pass, not per-rotation-math:
+
+```rust
+let mut cmd = vec![0.0; self.joints.len()];
+for (i, joint) in self.joints.iter().enumerate() {
+    if let Some(idx) = joint.cmd_idx {
+        cmd[i] = joint_cmds[idx];
+    }
+}
+```
+
+Then the per-joint loop has no match/branch at all:
+
+```rust
+for (joint, &cmd) in self.joints.iter().zip(cmd.iter()) {
+    let rotation = UnitQuaternion::from_scaled_axis(joint.rot_axis * cmd);
+    let translation = Translation3::from(joint.lin_axis * cmd);
+    let joint_local = joint.transform * Isometry3::from_parts(translation, rotation);
+    links[joint.child_link_idx] = links[joint.parent_link_idx] * joint_local;
+}
+```
+
+This works for all four joint types with the same two lines of math: for `Fixed` (`rot_axis = lin_axis = 0`), `rotation` collapses to identity and `translation` to zero regardless of `cmd`'s value — verified against nalgebra 0.30.1's own doc test, `UnitQuaternion::from_scaled_axis(Vector3::zeros()) == UnitQuaternion::identity()`. For `Revolute`/`Continuous` (`lin_axis = 0`), only `rotation` contributes. For `Prismatic` (`rot_axis = 0`), only `translation` contributes.
 
 ### 4. Update callers: `src/main.rs`, `tests/fk_correctness.rs`, `benches/fk_speed.rs`
 
 All three currently do `vec![0.0; galaw_model.joints.len()]` and/or iterate `galaw_model.joints` using `j.limit_lower..j.limit_upper` to build random commands. Change to:
 - Size vectors with `galaw_model.num_actuated_joints()`.
-- Filter to `j.cmd_idx.is_some()` (equivalently `joint.kinematics != Fixed`) when building per-joint random values, matching on `joint.kinematics` to get a `(lower, upper)` range — for `Rotational` with `limits: None` (continuous), fall back to a fixed test range like `-PI..PI` since there's no file-declared bound to sample.
+- Filter to `j.cmd_idx.is_some()` when building per-joint random values, using `j.limits` to get a `(lower, upper)` range — when `limits` is `None` (continuous joints), fall back to a fixed test range like `-PI..PI` since there's no file-declared bound to sample.
 
 ### 5. New fixtures + tests (kept as two separate, isolated fixtures so a failure points at one concern)
 
