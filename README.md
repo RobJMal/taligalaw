@@ -10,5 +10,8 @@ This repository incorporates assets and robot descriptions from various open-sou
 * **ANYmal D (ANYbotics)** – Derived from the [anymal_d_simple_description](https://github.com/ANYbotics/anymal_d_simple_description?tab=BSD-3-Clause-1-ov-file) project. Licensed under the **BSD 3-Clause License**. 
   * *Local Changes:* Modified package paths for visual and collision mesh resources.
   * *License Copy:* Located at `urdf/anybotics/LICENSE.anybotics`
+* **Wuji Hand (Wuji Technology)** – Derived from the [wuji-description](https://github.com/wuji-technology/wuji-description) project. Licensed under the **MIT License**.
+  * *Local Changes:* Modified package paths for visual and collision mesh resources.
+  * *License Copy:* Located at `urdf/wuji/LICENSE.wuji`
 
 Copies of the original licenses and any accompanying `NOTICE` files are preserved in the root directory or alongside the respective robot package folders.
