@@ -100,33 +100,11 @@ fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::erro
 }
 
 
-/// Parses a URDF file into a `GalawModel`.
-///
-/// After XML parsing, it resolves the joint order via Breadth-First Search (BFS)
-/// from the root so `compute_fk` can trust indices instead of file order.
-pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Error>> {
-    let content: String = fs::read_to_string(urdf_path)?;
-    let doc = roxmltree::Document::parse(&content)?;
-
-    let robot_name: String = doc
-        .root_element()
-        .attribute("name")
-        .ok_or("missing robot name")?
-        .to_string();
-    let mut links: Vec<Link> = Vec::new();
-    let mut joints: Vec<Joint> = Vec::new();
-
-    for node in doc.descendants() {
-        if node.tag_name().name() == "link" {
-            let link = parse_link(node)?;
-            links.push(link);
-        } else if node.tag_name().name() == "joint" {
-            let mut joint = parse_joint(node)?;
-            joint.cmd_idx = joints.len();
-            joints.push(joint);
-        }
-    }
-
+/// Resolves joint order for downstream functions.
+/// 
+/// Resolves the joint order via Breadth-First Search (BFS) from the 
+/// root so `compute_fk` can trust indices instead of order listed in URDF
+fn resolve_joint_order(links: &Vec<Link>, joints: &Vec<Joint>) -> Result<(Vec<Joint>, HashMap<String, usize>, HashMap<String, usize>), Box<dyn std::error::Error>> {
     // Enforcing order to ensure indexing is accurate
     let link_index: HashMap<&str, usize> = links
         .iter()
@@ -191,6 +169,39 @@ pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Erro
         .iter()
         .map(|j| (j.name.clone(), j.cmd_idx))
         .collect();
+
+    Ok((ordered_joints, link_name_to_idx, joint_name_to_idx))
+}
+
+
+/// Parses a URDF file into a `GalawModel`.
+///
+/// After XML parsing, it resolves the joint order via Breadth-First Search (BFS)
+/// from the root so `compute_fk` can trust indices instead of file order.
+pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Error>> {
+    let content: String = fs::read_to_string(urdf_path)?;
+    let doc = roxmltree::Document::parse(&content)?;
+
+    let robot_name: String = doc
+        .root_element()
+        .attribute("name")
+        .ok_or("missing robot name")?
+        .to_string();
+    let mut links: Vec<Link> = Vec::new();
+    let mut joints: Vec<Joint> = Vec::new();
+
+    for node in doc.descendants() {
+        if node.tag_name().name() == "link" {
+            let link = parse_link(node)?;
+            links.push(link);
+        } else if node.tag_name().name() == "joint" {
+            let mut joint = parse_joint(node)?;
+            joint.cmd_idx = joints.len();
+            joints.push(joint);
+        }
+    }
+
+    let (ordered_joints, link_name_to_idx, joint_name_to_idx) = resolve_joint_order(&links, &joints)?;
 
     Ok(GalawModel {
         name: robot_name,
