@@ -11,10 +11,10 @@ const N_POSES: usize = 100; // Random poses per robot
 
 // Robot embodiments to test
 const URDFS: &[&str] = &[
-    "assets/simple_robot.urdf",
-    "assets/simple_arm_6dof.urdf",
-    "assets/simple_arm_10dof.urdf",
-    "assets/simple_arm_20dof.urdf",
+    "assets/urdf/custom/simple_robot.urdf",
+    "assets/urdf/custom/simple_arm_6dof.urdf",
+    "assets/urdf/custom/simple_arm_10dof.urdf",
+    "assets/urdf/custom/simple_arm_20dof.urdf",
 ];
 
 /// Collects host/OS/CPU/memory info into a printable block, so benchmark
