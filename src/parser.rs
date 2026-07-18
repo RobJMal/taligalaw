@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::{fs};
+use std::fs;
 
 // Third-party
 use nalgebra::{Isometry3, Translation3, Unit, UnitQuaternion, Vector3};
@@ -8,16 +8,14 @@ use nalgebra::{Isometry3, Translation3, Unit, UnitQuaternion, Vector3};
 use crate::types::{GalawModel, Joint, Link};
 use crate::utils::parse_vec3_str;
 
-
 /// Parses <link> tag into a `Link`
 fn parse_link(node: roxmltree::Node<'_, '_>) -> Result<Link, Box<dyn std::error::Error>> {
     let link_name: String = node
         .attribute("name")
         .ok_or("link missing name attribute")?
-        .to_string(); 
-    Ok(Link {name: link_name})
+        .to_string();
+    Ok(Link { name: link_name })
 }
-
 
 /// Parses <joint> tag into a `Joint`
 fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::error::Error>> {
@@ -93,18 +91,21 @@ fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::erro
         axis,
         limit_lower,
         limit_upper,
-        cmd_idx: 0,     // Resolved later
+        cmd_idx: 0, // Resolved later
     };
 
     Ok(joint)
 }
 
-
 /// Resolves joint order for downstream functions.
-/// 
-/// Resolves the joint order via Breadth-First Search (BFS) from the 
+///
+/// Resolves the joint order via Breadth-First Search (BFS) from the
 /// root so `compute_fk` can trust indices instead of order listed in URDF
-fn resolve_joint_order(links: &Vec<Link>, joints: &Vec<Joint>) -> Result<(Vec<Joint>, HashMap<String, usize>, HashMap<String, usize>), Box<dyn std::error::Error>> {
+fn resolve_joint_order(
+    links: &Vec<Link>,
+    joints: &Vec<Joint>,
+) -> Result<(Vec<Joint>, HashMap<String, usize>, HashMap<String, usize>), Box<dyn std::error::Error>>
+{
     // Enforcing order to ensure indexing is accurate
     let link_index: HashMap<&str, usize> = links
         .iter()
@@ -173,7 +174,6 @@ fn resolve_joint_order(links: &Vec<Link>, joints: &Vec<Joint>) -> Result<(Vec<Jo
     Ok((ordered_joints, link_name_to_idx, joint_name_to_idx))
 }
 
-
 /// Parses a URDF file into a `GalawModel`.
 ///
 /// After XML parsing, it resolves the joint order via Breadth-First Search (BFS)
@@ -201,7 +201,8 @@ pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Erro
         }
     }
 
-    let (ordered_joints, link_name_to_idx, joint_name_to_idx) = resolve_joint_order(&links, &joints)?;
+    let (ordered_joints, link_name_to_idx, joint_name_to_idx) =
+        resolve_joint_order(&links, &joints)?;
 
     Ok(GalawModel {
         name: robot_name,
