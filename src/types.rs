@@ -39,7 +39,8 @@ pub struct Joint {
     pub child: String,
     pub child_link_idx: usize,
     pub transform: Isometry3<f64>,
-    pub axis: Unit<Vector3<f64>>,
+    pub lin_axis: Option<Unit<Vector3<f64>>>,   // Option since Unit doesn't allow zero-vector
+    pub rot_axis: Option<Unit<Vector3<f64>>>,   // Option since Unit doesn't allow zero-vector
     pub limit_lower: f64,
     pub limit_upper: f64,
     pub cmd_idx: usize,

@@ -70,6 +70,12 @@ fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::erro
     let (axis_x, axis_y, axis_z) = parse_vec3_str(axis_str)?;
     let axis = Unit::new_normalize(Vector3::new(axis_x, axis_y, axis_z));
 
+    let (rot_axis, lin_axis) = match joint_type {
+        JointType::Prismatic => (None, Some(axis)),
+        JointType::Revolute => (Some(axis), None),
+        _ => (None, None),
+    };
+
     // Extracting joint limits
     let joint_limit = node
         .children()
@@ -94,7 +100,8 @@ fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::erro
         child,
         child_link_idx: 0, // Dummy as it will be handled in next lines
         transform,
-        axis,
+        lin_axis: lin_axis,
+        rot_axis: rot_axis,
         limit_lower,
         limit_upper,
         cmd_idx: 0, // Resolved later
