@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::fs;
 
 // Third-party
@@ -139,22 +139,68 @@ fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::erro
     Ok(joint)
 }
 
+/// Visits the different nodes in DFS 
+fn dfs_visit (
+    link_idx: usize,
+    joints: &[Joint],
+    link_lookup: &HashMap<&str, usize>,
+    children_by_link: &HashMap<usize, Vec<usize>>,
+    ordered_joints: &mut Vec<Joint>,
+    cmd_counter: &mut usize,
+) {
+    let Some(child_joint_indices) = children_by_link.get(&link_idx) else {
+        return;
+    };
+
+    for &joint_idx in child_joint_indices {
+        let j = &joints[joint_idx];
+        let child_link_idx = link_lookup[j.child.as_str()];
+
+        let mut resolved = j.clone();
+        resolved.parent_link_idx = link_idx;
+        resolved.child_link_idx = child_link_idx;
+        resolved.cmd_idx = if j.joint_type == JointType::Fixed {
+            None
+        } else {
+            let idx = *cmd_counter;
+            *cmd_counter += 1;
+            Some(idx)
+        };
+        ordered_joints.push(resolved);
+
+        dfs_visit(child_link_idx, joints, link_lookup, children_by_link, ordered_joints, cmd_counter);
+    }
+}
+
 /// Resolves joint order for downstream functions.
 ///
-/// Resolves the joint order via Breadth-First Search (BFS) from the
-/// root so `compute_fk` can trust indices instead of order listed in URDF
+/// Resolves the joint order via Depth-First Search (DFS) pre-order from the
+/// root, so `compute_fk` can trust indices instead of file-declaration order.
+/// DFS is used (not BFS) for two reasons:
+///
+/// 1. Joints in the same branch end up at consecutive indices (e.g. a robot
+///    hand's index-finger joints land at 5, 6, 7, 8 instead of being
+///    interleaved with the other fingers' joints).
+/// 2. `k::Chain` — this project's own ground-truth for correctness testing —
+///    numbers its DOFs via DFS pre-order (confirmed by reading its source).
 fn resolve_joint_order(
     links: &Vec<Link>,
     joints: &Vec<Joint>,
 ) -> Result<(Vec<Joint>, HashMap<String, usize>, HashMap<String, usize>), Box<dyn std::error::Error>>
 {
     // Enforcing order to ensure indexing is accurate
-    let link_index: HashMap<&str, usize> = links
+    let link_lookup: HashMap<&str, usize> = links
         .iter()
         .enumerate()
         .map(|(i, l)| (l.name.as_str(), i))
         .collect();
 
+
+    let mut children_by_link: HashMap<usize, Vec<usize>> = HashMap::new();
+    for (joint_idx, j) in joints.iter().enumerate() {
+        let parent_idx = link_lookup[j.parent.as_str()];
+        children_by_link.entry(parent_idx).or_default().push(joint_idx);
+    }
     // Find the root
     let child_names: HashSet<&str> = joints.iter().map(|j| j.child.as_str()).collect();
     let root_candidates: Vec<usize> = links
@@ -163,7 +209,7 @@ fn resolve_joint_order(
         .filter(|(_, l)| !child_names.contains(l.name.as_str()))
         .map(|(i, _)| i)
         .collect();
-    let root_index = match root_candidates.as_slice() {
+    let root_idx = match root_candidates.as_slice() {
         [single] => *single,
         [] => return Err("no root link found - every link has a parent (cycle in URDF?)".into()),
         _ => {
@@ -181,28 +227,8 @@ fn resolve_joint_order(
 
     // Walk the tree from root, resolving parent/child link indices
     let mut ordered_joints: Vec<Joint> = Vec::with_capacity(joints.len());
-    let mut queue: VecDeque<usize> = VecDeque::from([root_index]);
     let mut acutated_joint_counter = 0;
-    while let Some(parent_idx) = queue.pop_front() {
-        for j in joints
-            .iter()
-            .filter(|j| link_index[j.parent.as_str()] == parent_idx)
-        {
-            let child_idx = link_index[j.child.as_str()];
-            let mut resolved = j.clone();
-            resolved.parent_link_idx = parent_idx;
-            resolved.child_link_idx = child_idx;
-            resolved.cmd_idx = if j.joint_type == JointType::Fixed {
-                None
-            } else {
-                let idx = acutated_joint_counter;
-                acutated_joint_counter += 1;
-                Some(idx)
-            };
-            ordered_joints.push(resolved);
-            queue.push_back(child_idx);
-        }
-    }
+    dfs_visit(root_idx, joints, &link_lookup, &children_by_link, &mut ordered_joints, &mut acutated_joint_counter);
 
     if ordered_joints.len() != joints.len() {
         return Err(
