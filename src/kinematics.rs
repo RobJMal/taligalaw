@@ -21,7 +21,7 @@ impl GalawModel {
 
         for joint in &self.joints {
             let cmd = joint.cmd_idx.map(|idx| joint_cmds[idx]).unwrap_or(0.0);
-            
+
             // Extracting rotation and translation components
             let rotation = match joint.rot_axis {
                 Some(axis) => UnitQuaternion::from_axis_angle(&axis, cmd),
@@ -32,8 +32,7 @@ impl GalawModel {
                 None => Translation3::identity(),
             };
 
-            let joint_local =
-                joint.transform * Isometry3::from_parts(translation, rotation);
+            let joint_local = joint.transform * Isometry3::from_parts(translation, rotation);
             links[joint.child_link_idx] = links[joint.parent_link_idx] * joint_local;
         }
 

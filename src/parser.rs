@@ -9,8 +9,11 @@ use crate::types::{GalawModel, Joint, JointType, Link};
 use crate::utils::parse_vec3_str;
 
 // ----- HELPER METHODS -----
-/// Parses the axis information from tag 
-fn read_axis(node: roxmltree::Node<'_, '_>, joint_name: &str) -> Result<Unit<Vector3<f64>>, Box<dyn std::error::Error>> {
+/// Parses the axis information from tag
+fn read_axis(
+    node: roxmltree::Node<'_, '_>,
+    joint_name: &str,
+) -> Result<Unit<Vector3<f64>>, Box<dyn std::error::Error>> {
     // Extracting axis angles
     let axis_str: &str = node
         .children()
@@ -23,9 +26,12 @@ fn read_axis(node: roxmltree::Node<'_, '_>, joint_name: &str) -> Result<Unit<Vec
 }
 
 /// Parses the joint limit information
-/// 
+///
 /// Returns (limit_lower, limit_upper)
-fn read_joint_limits(node: roxmltree::Node<'_, '_>, joint_name: &str) -> Result<(f64, f64), Box<dyn std::error::Error>> {
+fn read_joint_limits(
+    node: roxmltree::Node<'_, '_>,
+    joint_name: &str,
+) -> Result<(f64, f64), Box<dyn std::error::Error>> {
     let joint_limit = node
         .children()
         .find(|n| n.tag_name().name() == "limit")
@@ -121,13 +127,13 @@ fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::erro
         parent,
         parent_link_idx: 0, // Resolved in resolve_joint_order
         child,
-        child_link_idx: 0,  // Resolved in resolve_joint_order
+        child_link_idx: 0, // Resolved in resolve_joint_order
         transform,
         lin_axis: lin_axis,
         rot_axis: rot_axis,
         limit_lower: limit_lower,
         limit_upper: limit_upper,
-        cmd_idx: None,      // Resolved in resolve_joint_order
+        cmd_idx: None, // Resolved in resolve_joint_order
     };
 
     Ok(joint)
@@ -212,7 +218,7 @@ fn resolve_joint_order(
 
     let joint_name_to_idx: HashMap<String, usize> = ordered_joints
         .iter()
-        .filter_map(|j| j.cmd_idx.map(|idx |(j.name.clone(), idx)))
+        .filter_map(|j| j.cmd_idx.map(|idx| (j.name.clone(), idx)))
         .collect();
 
     Ok((ordered_joints, link_name_to_idx, joint_name_to_idx))
@@ -247,7 +253,10 @@ pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Erro
     let (ordered_joints, link_name_to_idx, joint_name_to_idx) =
         resolve_joint_order(&links, &joints)?;
 
-    let num_actuated_joints = ordered_joints.iter().filter(|j| j.cmd_idx.is_some()).count();
+    let num_actuated_joints = ordered_joints
+        .iter()
+        .filter(|j| j.cmd_idx.is_some())
+        .count();
 
     Ok(GalawModel {
         name: robot_name,
