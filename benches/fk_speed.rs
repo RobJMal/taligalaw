@@ -1,22 +1,19 @@
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use galaw::load_urdf;
-use rand::{RngExt, SeedableRng};
-use rand_chacha::ChaCha8Rng;
 use std::fs;
 use std::hint::black_box; // Prevents compiler from optimizing away code since we're benchmarking ("be pessimistic")
-use sysinfo::System;
 
+// Third-Party 
+use sysinfo::System;
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use rand::{RngExt, SeedableRng};
+use rand_chacha::ChaCha8Rng;
+
+// Custom
+use galaw::{fixtures::BENCH_URDFS, load_urdf};
+
+// ----- CONSTANTS -----
 const RNG_SEED: u64 = 42;
 const N_POSES: usize = 100; // Random poses per robot
 
-// Robot embodiments to test
-const URDFS: &[&str] = &[
-    "assets/urdf/custom/simple_arm_2dof.urdf",
-    "assets/urdf/custom/simple-arm_3dof_rrp.urdf",
-    "assets/urdf/custom/simple_arm_6dof.urdf",
-    "assets/urdf/custom/simple_arm_10dof.urdf",
-    "assets/urdf/custom/simple_arm_20dof.urdf",
-];
 
 /// Collects host/OS/CPU/memory info into a printable block, so benchmark
 /// numbers can be reproduced on (or compared against) other machines.
@@ -66,7 +63,7 @@ fn bench_fk(c: &mut Criterion) {
         format!("<pre>{specs}</pre>"),
     );
 
-    for &urdf_path in URDFS {
+    for &urdf_path in BENCH_URDFS {
         // Setup is NOT timed
         let galaw_model = load_urdf(urdf_path).unwrap();
         let k_chain = k::Chain::<f64>::from_urdf_file(urdf_path).unwrap();

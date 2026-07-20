@@ -18,6 +18,7 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
+// Third-party
 use charming::component::{Axis, Legend, Title};
 use charming::element::{
     AreaStyle, AxisType, ItemStyle, Label, LabelPosition, LineStyle, NameLocation,
@@ -25,18 +26,12 @@ use charming::element::{
 use charming::series::Line;
 use charming::{Chart, ImageFormat, ImageRenderer};
 
+// Custom
+use galaw::{fixtures::BENCH_URDFS, load_urdf};
+
 /// Calls per timed iteration in benches/fk_speed.rs. Criterion's estimates are
 /// per iteration, so dividing by this converts to per single FK call.
 const N_POSES: f64 = 100.0;
-
-/// (criterion group dir, display label, DOF). Add a row when you add a robot to
-/// the benchmark's URDFS list — keep this in sync with the robot `name=` attrs.
-const ROBOTS: &[(&str, &str, u32)] = &[
-    ("fk_simple_arm", "simple_arm", 2),
-    ("fk_simple_arm_6dof", "simple_arm_6dof", 6),
-    ("fk_simple_arm_10dof", "simple_arm_10dof", 10),
-    ("fk_simple_arm_20dof", "simple_arm_20dof", 20),
-];
 
 const IMPLS: [&str; 2] = ["galaw", "k"];
 
@@ -50,8 +45,24 @@ struct Stat {
     hi: f64,
 }
 
+struct RobotInfo {
+    group: String,
+    bench_id: u32,  // matches galaw_model.joints.len()
+    dof: u32,       // matches galaw_model.num_actuated_joints
+}
+
+// ----- HELPER METHODS -----
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn robot_info(urdf_path: &str) -> Result<RobotInfo, Box<dyn Error>> {
+    let model = load_urdf(urdf_path)?;
+    Ok(RobotInfo {
+        group: format!("fk_{}", model.name),
+        bench_id: model.joints.len() as u32,
+        dof: model.num_actuated_joints as u32,
+    })
 }
 
 /// Reads mean + confidence interval (ns per call) from Criterion's estimates.json.
@@ -92,12 +103,13 @@ fn stat(group: &str, impl_: &str, dof: u32) -> Result<Stat, Box<dyn Error>> {
 /// `to_vals` maps a Stat (ns/call) into (mean, lo, hi) in the chart's own units
 /// — throughput inverts, so it also swaps lo/hi. `round` tidies the label text.
 fn build_chart(
+    robots: &[RobotInfo],
     title: &str,
     y_name: &str,
     to_vals: impl Fn(&Stat) -> (f64, f64, f64),
     round: impl Fn(f64) -> f64,
 ) -> Result<Chart, Box<dyn Error>> {
-    let dof_labels: Vec<String> = ROBOTS.iter().map(|(_, _, d)| d.to_string()).collect();
+    let dof_labels: Vec<String> = robots.iter().map(|r| r.dof.to_string()).collect();
 
     let mut chart = Chart::new()
         .background_color("#ffffff")
@@ -130,8 +142,8 @@ fn build_chart(
             LabelPosition::Bottom
         };
         let (mut means, mut los, mut heights) = (Vec::new(), Vec::new(), Vec::new());
-        for &(group, _, dof) in ROBOTS {
-            let (m, lo, hi) = to_vals(&stat(group, impl_, dof)?);
+        for robot in robots {
+            let (m, lo, hi) = to_vals(&stat(&robot.group, impl_, robot.bench_id)?);
             means.push(round(m));
             los.push(lo);
             heights.push(hi - lo); // band height, stacked on top of `lo`
@@ -179,12 +191,18 @@ fn build_chart(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let robots: Vec<RobotInfo> = BENCH_URDFS
+        .iter()
+        .map(|&p| robot_info(p))
+        .collect::<Result<_, _>>()?;
+
     let out = manifest_dir().join("docs/bench");
     fs::create_dir_all(&out)?;
     let mut renderer = ImageRenderer::new(900, 560);
 
     // Latency: ns/call, CI bounds used directly.
     let latency = build_chart(
+        &robots,
         "FK latency scaling (95% CI)",
         "ns per call (lower is better)",
         |s| (s.mean, s.lo, s.hi),
@@ -201,6 +219,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     // Throughput: M calls/sec = 1e9 / ns / 1e6. Decreasing in ns, so lo/hi swap.
     let mcps = |ns: f64| 1e9 / ns / 1e6;
     let throughput = build_chart(
+        &robots,
         "FK throughput (95% CI)",
         "M calls/sec (higher is better)",
         move |s| (mcps(s.mean), mcps(s.hi), mcps(s.lo)),
