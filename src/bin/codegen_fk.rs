@@ -12,11 +12,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let galaw_model = load_urdf(urdf_path)?;
 
+    // Stores output of generated code
+    let mut codegen_output: Vec<String> = Vec::new();
+
     // Modules/libraries that are imported
     let import_code: String = format!(
         "use nalgebra::{{Isometry3, Translation3, UnitQuaternion, Quaternion, Unit, Vector3}};"
     );
-    println!("{}", import_code);
+    codegen_output.push(import_code);
 
     // Function header code
     let fn_header_code: String = format!(
@@ -24,10 +27,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         galaw_model.num_actuated_joints,
         galaw_model.links.len(),
     );
-    println!("{}", fn_header_code);
+    codegen_output.push(fn_header_code);
 
     let base_link_var_code: String = format!("let link_base_link = Isometry3::identity();");
-    println!("{}", base_link_var_code);
+    codegen_output.push(base_link_var_code);
 
     // Keeps track of the generated variables
     let mut link_vars_by_idx: Vec<Option<String>> = vec![None; galaw_model.links.len()];
@@ -68,8 +71,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let code_line: String = format!("let {} = {} * {};", link_name_var, parent_var, joint_local);
         link_vars_by_idx[joint.child_link_idx] = Some(link_name_var.clone());
-        println!("{}", code_line);
-        println!();
+        codegen_output.push(code_line);
     }
 
     // Putting the link_vars in order in the return array
@@ -79,11 +81,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ordered_link_vars.push(var_name);
     }
     let fn_return_code: String = format!("[{}]", ordered_link_vars.join(", "));
-    println!("{}", fn_return_code);
+    codegen_output.push(fn_return_code);
 
     let fn_closer_code: String = format!("}}").to_string();
-    println!("{}", fn_closer_code);
+    codegen_output.push(fn_closer_code);
 
+    let codegen: String = codegen_output.join("\n");
+
+    // Creating directory if it's missing
+    if let Some(parent_dir) = std::path::Path::new(out_path).parent() {
+        std::fs::create_dir_all(parent_dir)?
+    }
+    std::fs::write(out_path, codegen)?;
     println!("Generated code has been written to: {}", out_path);
+
     Ok(())
 }
