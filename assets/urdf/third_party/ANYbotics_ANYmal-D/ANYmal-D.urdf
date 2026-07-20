@@ -8,7 +8,7 @@
   Original: https://github.com/ANYbotics/anymal_d_simple_description
   License: BSD 3-Clause
 -->
-<robot name="anymal">
+<robot name="anymal-D">
   <link name="base">
     <visual>
       <origin rpy="0 0 0" xyz="0 0 0"/>
