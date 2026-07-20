@@ -28,6 +28,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     codegen_output.push(import_code);
 
+    // Local variables are named directly after URDF link names, which aren't
+    // guaranteed to be lower case snake_case (e.g. ANYmal-D's "LF_HAA_drive") - silence
+    // the resulting lint rather than rewriting names URDF authors chose.
+    let allow_non_snake_case_code: String = "#[allow(non_snake_case)]".to_string();
+    codegen_output.push(allow_non_snake_case_code);
+
     // Function header code
     let fn_header_code: String = format!(
         "pub fn compute_fk(joint_cmds: &[f64; {}]) -> [Isometry3<f64>; {}] {{",
@@ -66,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let translation: String = match joint.lin_axis {
             Some(axis) => {
                 let vec = axis.into_inner();
-                let axis_vec_str: String = format!("Unit::new_unchecked(Vector3::new({:?}, {:?}, {:?}))", vec.x, vec.y, vec.z);
+                let axis_vec_str: String = format!("Vector3::new({:?}, {:?}, {:?})", vec.x, vec.y, vec.z);
                 format!("Translation3::from({} * joint_cmds[{}])", axis_vec_str, joint.cmd_idx.unwrap()).to_string()
             }
             None => "Translation3::identity()".to_string(),
