@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let rotation: String = match joint.rot_axis {
             Some(axis) => {
                 let vec = axis.into_inner();
-                let axis_vec_str: String = format!("Vector3::new({}, {}, {})", vec.x, vec.y, vec.z);
+                let axis_vec_str: String = format!("Vector3::new({:?}, {:?}, {:?})", vec.x, vec.y, vec.z);
                 format!("UnitQuaternion::from_axis_angle(&{}, &joint_cmds[{}])", axis_vec_str, joint.cmd_idx.unwrap()).to_string()
             }
             None => "UnitQuaternion::identity()".to_string(),
@@ -31,15 +31,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let translation: String = match joint.lin_axis {
             Some(axis) => {
                 let vec = axis.into_inner();
-                let axis_vec_str: String = format!("Vector3::new({}, {}, {})", vec.x, vec.y, vec.z);
+                let axis_vec_str: String = format!("Vector3::new({:?}, {:?}, {:?})", vec.x, vec.y, vec.z);
                 format!("Translation3::from({} * &joint_cmds[{}]),", axis_vec_str, joint.cmd_idx.unwrap()).to_string()
             }
             None => "Translation3::identity()".to_string(),
         };
         let joint_transform_t = &joint.transform.translation;
-        let joint_transform_t_str: String = format!("Translation3::new({}, {}, {})", joint_transform_t.x, joint_transform_t.y, joint_transform_t.z).to_string();
+        let joint_transform_t_str: String = format!("Translation3::new({:?}, {:?}, {:?})", joint_transform_t.x, joint_transform_t.y, joint_transform_t.z).to_string();
         let joint_transform_r = &joint.transform.rotation;
-        let joint_transform_r_str: String = format!("UnitQuaternion::from_quaternion(Quaternion::new({}, {}, {}, {}))", joint_transform_r.w, joint_transform_r.i, joint_transform_r.j, joint_transform_r.k).to_string();
+        let joint_transform_r_str: String = format!("UnitQuaternion::from_quaternion(Quaternion::new({:?}, {:?}, {:?}, {:?}))", joint_transform_r.w, joint_transform_r.i, joint_transform_r.j, joint_transform_r.k).to_string();
 
         let joint_transform: String = format!(
             "Isometry3::from_parts({}, {}))", joint_transform_t_str, joint_transform_r_str 
