@@ -18,25 +18,21 @@ use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
 
-use charming::component::{Axis, Legend, Title};
+// Third-party
+use charming::component::{Axis, Grid, Legend, Title};
 use charming::element::{
-    AreaStyle, AxisType, ItemStyle, Label, LabelPosition, LineStyle, NameLocation,
+    AreaStyle, AxisLabel, AxisType, ItemStyle, Label, LabelPosition, LineStyle, NameLocation,
+    TextStyle,
 };
 use charming::series::Line;
 use charming::{Chart, ImageFormat, ImageRenderer};
 
+// Custom
+use galaw::{fixtures::BENCH_URDFS, load_urdf};
+
 /// Calls per timed iteration in benches/fk_speed.rs. Criterion's estimates are
 /// per iteration, so dividing by this converts to per single FK call.
 const N_POSES: f64 = 100.0;
-
-/// (criterion group dir, display label, DOF). Add a row when you add a robot to
-/// the benchmark's URDFS list — keep this in sync with the robot `name=` attrs.
-const ROBOTS: &[(&str, &str, u32)] = &[
-    ("fk_simple_arm", "simple_arm", 2),
-    ("fk_simple_arm_6dof", "simple_arm_6dof", 6),
-    ("fk_simple_arm_10dof", "simple_arm_10dof", 10),
-    ("fk_simple_arm_20dof", "simple_arm_20dof", 20),
-];
 
 const IMPLS: [&str; 2] = ["galaw", "k"];
 
@@ -50,8 +46,26 @@ struct Stat {
     hi: f64,
 }
 
+struct RobotInfo {
+    name: String,   // matches galaw_model.name, for the x-axis label
+    group: String,
+    bench_id: u32,  // matches galaw_model.joints.len()
+    dof: u32,       // matches galaw_model.num_actuated_joints
+}
+
+// ----- HELPER METHODS -----
 fn manifest_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn robot_info(urdf_path: &str) -> Result<RobotInfo, Box<dyn Error>> {
+    let model = load_urdf(urdf_path)?;
+    Ok(RobotInfo {
+        name: model.name.clone(),
+        group: format!("fk_{}", model.name),
+        bench_id: model.joints.len() as u32,
+        dof: model.num_actuated_joints as u32,
+    })
 }
 
 /// Reads mean + confidence interval (ns per call) from Criterion's estimates.json.
@@ -92,24 +106,56 @@ fn stat(group: &str, impl_: &str, dof: u32) -> Result<Stat, Box<dyn Error>> {
 /// `to_vals` maps a Stat (ns/call) into (mean, lo, hi) in the chart's own units
 /// — throughput inverts, so it also swaps lo/hi. `round` tidies the label text.
 fn build_chart(
+    robots: &[RobotInfo],
     title: &str,
     y_name: &str,
     to_vals: impl Fn(&Stat) -> (f64, f64, f64),
     round: impl Fn(f64) -> f64,
 ) -> Result<Chart, Box<dyn Error>> {
-    let dof_labels: Vec<String> = ROBOTS.iter().map(|(_, _, d)| d.to_string()).collect();
+    // "robot_name\n[total_joints/actuated_joints]" — e.g. "Enlight-L\n[9/7]".
+    let dof_labels: Vec<String> = robots
+        .iter()
+        .map(|r| format!("{}\n[{}/{}]", r.name, r.bench_id, r.dof))
+        .collect();
 
     let mut chart = Chart::new()
         .background_color("#ffffff")
-        .title(Title::new().text(title).left("center"))
+        .title(
+            Title::new()
+                .text(title)
+                .left("center")
+                .text_style(TextStyle::new().font_size(34.0)),
+        )
         // Only the mean lines get a legend entry; the band series are unnamed.
-        .legend(Legend::new().top("bottom").data(IMPLS.to_vec()))
+        .legend(
+            Legend::new()
+                .top("bottom")
+                .text_style(TextStyle::new().font_size(18.0))
+                .data(IMPLS.to_vec()),
+        )
+        // Tight left/right/top margins so the plot fills the canvas instead
+        // of leaving unused whitespace at the much larger 1600x900 size;
+        // bottom stays generous for the two-line tick labels + axis name + legend.
+        .grid(
+            Grid::new()
+                .left("4%")
+                .right("4%")
+                .top("12%")
+                .bottom(170)
+                .contain_label(true),
+        )
         .x_axis(
             Axis::new()
                 .type_(AxisType::Category)
-                .name("Degrees of freedom (joints)")
+                .name("Robot [total joints / actuated joints]")
                 .name_location(NameLocation::Middle) // centered under the axis, not clipped at the end
-                .name_gap(32.0)
+                .name_gap(85.0) // clears the two-line tick labels above it
+                .name_text_style(TextStyle::new().font_size(20.0))
+                // interval(0.0) forces every category to render — ECharts'
+                // default "auto" interval was silently hiding most of these
+                // (only 4 of 8 robots were showing up) because it judged
+                // them too crowded to fit; font_size makes them readable.
+                .axis_label(AxisLabel::new().font_size(17.0).interval(0.0))
                 .data(dof_labels),
         )
         .y_axis(
@@ -117,21 +163,30 @@ fn build_chart(
                 .type_(AxisType::Value)
                 .name(y_name)
                 .name_location(NameLocation::Middle) // centered & auto-rotated along the axis
-                .name_gap(50.0) // clears the tick numbers
+                .name_gap(70.0) // clears the tick numbers
+                .name_text_style(TextStyle::new().font_size(20.0))
+                .axis_label(AxisLabel::new().font_size(17.0))
                 .min(0.0), // zero baseline; ECharts auto-picks a clean max
         );
 
-    for (i, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
-        // galaw's label sits above its line, k's below — so the two near-identical
-        // series never stack their boxes on top of each other.
-        let label_pos = if i == 0 {
-            LabelPosition::Top
-        } else {
-            LabelPosition::Bottom
-        };
+    for (_, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
+        // Both labels sit above their point — never below — so neither can
+        // ever collide with the x-axis tick labels, regardless of how close
+        // a data value gets to zero (a Bottom position can't make that
+        // guarantee: it's pulled toward the axis for exactly the near-zero
+        // points that caused the collision in the first place).
+        //
+        // Both series use the SAME small distance: each label stays close
+        // to its own point instead of reaching toward the other series. A
+        // larger distance on one series (tried earlier) backfires here —
+        // since both float upward, a bigger offset on the lower-valued
+        // series pushes its label *into* the higher-valued series' label
+        // instead of away from it, whenever the two points are close.
+        let label_pos = LabelPosition::Top;
+        let label_distance = 8.0;
         let (mut means, mut los, mut heights) = (Vec::new(), Vec::new(), Vec::new());
-        for &(group, _, dof) in ROBOTS {
-            let (m, lo, hi) = to_vals(&stat(group, impl_, dof)?);
+        for robot in robots {
+            let (m, lo, hi) = to_vals(&stat(&robot.group, impl_, robot.bench_id)?);
             means.push(round(m));
             los.push(lo);
             heights.push(hi - lo); // band height, stacked on top of `lo`
@@ -165,12 +220,13 @@ fn build_chart(
                     Label::new()
                         .show(true)
                         .position(label_pos) // galaw above its line, k below
-                        .distance(6.0) // gap between the point and the box
+                        .distance(label_distance) // gap between the point and the box
+                        .font_size(17.0)
                         .color(color) // text in the line's color
                         .background_color("#ffffff") // white box fill
                         .border_color(color) // box outline in the line's color
                         .border_width(1.0)
-                        .padding((3.0, 6.0, 3.0, 6.0)), // spacing inside the box
+                        .padding((4.0, 8.0, 4.0, 8.0)), // spacing inside the box
                 )
                 .data(means),
         );
@@ -179,12 +235,25 @@ fn build_chart(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let mut robots: Vec<RobotInfo> = BENCH_URDFS
+        .iter()
+        .map(|&p| robot_info(p))
+        .collect::<Result<_, _>>()?;
+    // BENCH_URDFS isn't declared in DOF order, so the x-axis needs an
+    // explicit sort — otherwise the category axis just follows fixture
+    // declaration order, which isn't monotonic.
+    robots.sort_by_key(|r| r.dof);
+
     let out = manifest_dir().join("docs/bench");
     fs::create_dir_all(&out)?;
-    let mut renderer = ImageRenderer::new(900, 560);
+    // Wider (room for 8 two-line category labels at readable size, without
+    // ECharts skipping any) and taller (room between close-together points
+    // and bigger text overall) than the original 900x560.
+    let mut renderer = ImageRenderer::new(1600, 900);
 
     // Latency: ns/call, CI bounds used directly.
     let latency = build_chart(
+        &robots,
         "FK latency scaling (95% CI)",
         "ns per call (lower is better)",
         |s| (s.mean, s.lo, s.hi),
@@ -198,11 +267,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     println!("wrote {}", p1.display());
 
-    // Throughput: M calls/sec = 1e9 / ns / 1e6. Decreasing in ns, so lo/hi swap.
+    // Throughput: million calls/sec = 1e9 / ns / 1e6. Decreasing in ns, so lo/hi swap.
     let mcps = |ns: f64| 1e9 / ns / 1e6;
     let throughput = build_chart(
+        &robots,
         "FK throughput (95% CI)",
-        "M calls/sec (higher is better)",
+        "million calls/sec (higher is better)",
         move |s| (mcps(s.mean), mcps(s.hi), mcps(s.lo)),
         |x| (x * 100.0).round() / 100.0,
     )?;

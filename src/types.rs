@@ -7,18 +7,43 @@ pub struct Link {
     pub name: String,
 }
 
+/// Represents joint types found in URDFs
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JointType {
+    Revolute,
+    Prismatic,
+    Fixed,
+    Continuous,
+}
+
+impl std::str::FromStr for JointType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "revolute" => Ok(JointType::Revolute),
+            "prismatic" => Ok(JointType::Prismatic),
+            "fixed" => Ok(JointType::Fixed),
+            "continuous" => Ok(JointType::Continuous),
+            other => Err(format!("unknown joint type: {other}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Joint {
     pub name: String,
+    pub joint_type: JointType,
     pub parent: String,
     pub parent_link_idx: usize,
     pub child: String,
     pub child_link_idx: usize,
     pub transform: Isometry3<f64>,
-    pub axis: Unit<Vector3<f64>>,
-    pub limit_lower: f64,
-    pub limit_upper: f64,
-    pub cmd_idx: usize,
+    pub lin_axis: Option<Unit<Vector3<f64>>>, // Option since Unit doesn't allow zero-vector
+    pub rot_axis: Option<Unit<Vector3<f64>>>, // Option since Unit doesn't allow zero-vector
+    pub limit_lower: Option<f64>,
+    pub limit_upper: Option<f64>,
+    pub cmd_idx: Option<usize>,
 }
 
 #[derive(Debug)]
@@ -28,6 +53,7 @@ pub struct GalawModel {
     pub joints: Vec<Joint>,
     pub link_name_to_idx: HashMap<String, usize>,
     pub joint_name_to_idx: HashMap<String, usize>,
+    pub num_actuated_joints: usize,
 }
 
 impl GalawModel {
