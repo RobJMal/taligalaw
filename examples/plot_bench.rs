@@ -120,29 +120,42 @@ fn build_chart(
 
     let mut chart = Chart::new()
         .background_color("#ffffff")
-        .title(Title::new().text(title).left("center").text_style(TextStyle::new().font_size(26.0)))
+        .title(
+            Title::new()
+                .text(title)
+                .left("center")
+                .text_style(TextStyle::new().font_size(34.0)),
+        )
         // Only the mean lines get a legend entry; the band series are unnamed.
         .legend(
             Legend::new()
                 .top("bottom")
-                .text_style(TextStyle::new().font_size(15.0))
+                .text_style(TextStyle::new().font_size(18.0))
                 .data(IMPLS.to_vec()),
         )
-        // Bottom margin for tick labels + axis name + legend — larger than
-        // before since the tick labels are two lines tall and bigger font now.
-        .grid(Grid::new().bottom(140).contain_label(true))
+        // Tight left/right/top margins so the plot fills the canvas instead
+        // of leaving unused whitespace at the much larger 1600x900 size;
+        // bottom stays generous for the two-line tick labels + axis name + legend.
+        .grid(
+            Grid::new()
+                .left("4%")
+                .right("4%")
+                .top("12%")
+                .bottom(170)
+                .contain_label(true),
+        )
         .x_axis(
             Axis::new()
                 .type_(AxisType::Category)
                 .name("Robot [total joints / actuated joints]")
                 .name_location(NameLocation::Middle) // centered under the axis, not clipped at the end
-                .name_gap(70.0) // clears the two-line tick labels above it
-                .name_text_style(TextStyle::new().font_size(15.0))
+                .name_gap(85.0) // clears the two-line tick labels above it
+                .name_text_style(TextStyle::new().font_size(20.0))
                 // interval(0.0) forces every category to render — ECharts'
                 // default "auto" interval was silently hiding most of these
                 // (only 4 of 8 robots were showing up) because it judged
                 // them too crowded to fit; font_size makes them readable.
-                .axis_label(AxisLabel::new().font_size(14.0).interval(0.0))
+                .axis_label(AxisLabel::new().font_size(17.0).interval(0.0))
                 .data(dof_labels),
         )
         .y_axis(
@@ -150,13 +163,13 @@ fn build_chart(
                 .type_(AxisType::Value)
                 .name(y_name)
                 .name_location(NameLocation::Middle) // centered & auto-rotated along the axis
-                .name_gap(60.0) // clears the tick numbers
-                .name_text_style(TextStyle::new().font_size(15.0))
-                .axis_label(AxisLabel::new().font_size(14.0))
+                .name_gap(70.0) // clears the tick numbers
+                .name_text_style(TextStyle::new().font_size(20.0))
+                .axis_label(AxisLabel::new().font_size(17.0))
                 .min(0.0), // zero baseline; ECharts auto-picks a clean max
         );
 
-    for (i, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
+    for (_, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
         // Both labels sit above their point — never below — so neither can
         // ever collide with the x-axis tick labels, regardless of how close
         // a data value gets to zero (a Bottom position can't make that
@@ -208,12 +221,12 @@ fn build_chart(
                         .show(true)
                         .position(label_pos) // galaw above its line, k below
                         .distance(label_distance) // gap between the point and the box
-                        .font_size(14.0)
+                        .font_size(17.0)
                         .color(color) // text in the line's color
                         .background_color("#ffffff") // white box fill
                         .border_color(color) // box outline in the line's color
                         .border_width(1.0)
-                        .padding((3.0, 6.0, 3.0, 6.0)), // spacing inside the box
+                        .padding((4.0, 8.0, 4.0, 8.0)), // spacing inside the box
                 )
                 .data(means),
         );
