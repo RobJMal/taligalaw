@@ -19,7 +19,7 @@ use std::fs;
 use std::path::PathBuf;
 
 // Third-party
-use charming::component::{Axis, Legend, Title};
+use charming::component::{Axis, Grid, Legend, Title};
 use charming::element::{
     AreaStyle, AxisType, ItemStyle, Label, LabelPosition, LineStyle, NameLocation,
 };
@@ -116,6 +116,8 @@ fn build_chart(
         .title(Title::new().text(title).left("center"))
         // Only the mean lines get a legend entry; the band series are unnamed.
         .legend(Legend::new().top("bottom").data(IMPLS.to_vec()))
+        // Bottom margin for tick labels + axis name + legend.
+        .grid(Grid::new().bottom(60).contain_label(true))
         .x_axis(
             Axis::new()
                 .type_(AxisType::Category)
@@ -134,13 +136,20 @@ fn build_chart(
         );
 
     for (i, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
-        // galaw's label sits above its line, k's below — so the two near-identical
-        // series never stack their boxes on top of each other.
-        let label_pos = if i == 0 {
-            LabelPosition::Top
-        } else {
-            LabelPosition::Bottom
-        };
+        // Both labels sit above their point — never below — so neither can
+        // ever collide with the x-axis tick labels, regardless of how close
+        // a data value gets to zero (a Bottom position can't make that
+        // guarantee: it's pulled toward the axis for exactly the near-zero
+        // points that caused the collision in the first place).
+        //
+        // Both series use the SAME small distance: each label stays close
+        // to its own point instead of reaching toward the other series. A
+        // larger distance on one series (tried earlier) backfires here —
+        // since both float upward, a bigger offset on the lower-valued
+        // series pushes its label *into* the higher-valued series' label
+        // instead of away from it, whenever the two points are close.
+        let label_pos = LabelPosition::Top;
+        let label_distance = 8.0;
         let (mut means, mut los, mut heights) = (Vec::new(), Vec::new(), Vec::new());
         for robot in robots {
             let (m, lo, hi) = to_vals(&stat(&robot.group, impl_, robot.bench_id)?);
@@ -177,7 +186,7 @@ fn build_chart(
                     Label::new()
                         .show(true)
                         .position(label_pos) // galaw above its line, k below
-                        .distance(6.0) // gap between the point and the box
+                        .distance(label_distance) // gap between the point and the box
                         .color(color) // text in the line's color
                         .background_color("#ffffff") // white box fill
                         .border_color(color) // box outline in the line's color
@@ -191,14 +200,20 @@ fn build_chart(
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let robots: Vec<RobotInfo> = BENCH_URDFS
+    let mut robots: Vec<RobotInfo> = BENCH_URDFS
         .iter()
         .map(|&p| robot_info(p))
         .collect::<Result<_, _>>()?;
+    // BENCH_URDFS isn't declared in DOF order, so the x-axis needs an
+    // explicit sort — otherwise the category axis just follows fixture
+    // declaration order, which isn't monotonic.
+    robots.sort_by_key(|r| r.dof);
 
     let out = manifest_dir().join("docs/bench");
     fs::create_dir_all(&out)?;
-    let mut renderer = ImageRenderer::new(900, 560);
+    // Taller than the original 560 — more vertical pixels between close-together
+    // data points gives their labels more room to sit apart without overlapping.
+    let mut renderer = ImageRenderer::new(1000, 760);
 
     // Latency: ns/call, CI bounds used directly.
     let latency = build_chart(
@@ -216,12 +231,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     )?;
     println!("wrote {}", p1.display());
 
-    // Throughput: M calls/sec = 1e9 / ns / 1e6. Decreasing in ns, so lo/hi swap.
+    // Throughput: million calls/sec = 1e9 / ns / 1e6. Decreasing in ns, so lo/hi swap.
     let mcps = |ns: f64| 1e9 / ns / 1e6;
     let throughput = build_chart(
         &robots,
         "FK throughput (95% CI)",
-        "M calls/sec (higher is better)",
+        "million calls/sec (higher is better)",
         move |s| (mcps(s.mean), mcps(s.hi), mcps(s.lo)),
         |x| (x * 100.0).round() / 100.0,
     )?;
