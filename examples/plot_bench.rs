@@ -40,6 +40,16 @@ const IMPLS: [&str; 3] = ["galaw", "galaw-generated", "k"];
 /// galaw-generated=bluish green, k=orange.
 const COLORS: [&str; 3] = ["#0072B2", "#009E73", "#E69F00"];
 
+const LEGEND_FONT_SIZE: f64 = 18.0;
+
+/// Approx. rendered height (px) of one data-point label box at LABEL_FONT_SIZE
+/// (text line-height + the label's own padding/border) — used to stagger each
+/// series' label distance from its point by index, so two series' labels can
+/// never collide even if their points land at the same y-pixel. Scales to
+/// however many entries IMPLS has; no per-series manual tuning needed.
+const LABEL_FONT_SIZE: f64 = 17.0;
+const LABEL_STAGGER_PX: f64 = 30.0;
+
 /// Mean and 95% CI bounds for a single benchmark, in ns per FK call.
 struct Stat {
     mean: f64,
@@ -131,7 +141,15 @@ fn build_chart(
         .legend(
             Legend::new()
                 .top("bottom")
-                .text_style(TextStyle::new().font_size(18.0))
+                .text_style(TextStyle::new().font_size(LEGEND_FONT_SIZE))
+                // item_gap is derived from the font size (not a flat magic
+                // number) so it stays proportionate if the font size ever
+                // changes. width caps the legend's own box so ECharts wraps
+                // it onto additional rows automatically once entries no
+                // longer fit on one line - covers however many entries
+                // IMPLS ends up with, not just today's 3.
+                .item_gap(LEGEND_FONT_SIZE * 2.0)
+                .width("90%")
                 .data(IMPLS.to_vec()),
         )
         // Tight left/right/top margins so the plot fills the canvas instead
@@ -178,21 +196,20 @@ fn build_chart(
                 .axis_label(AxisLabel::new().font_size(17.0)),
         );
 
-    for (_, (&impl_, &color)) in IMPLS.iter().zip(COLORS.iter()).enumerate() {
-        // Both labels sit above their point — never below — so neither can
-        // ever collide with the x-axis tick labels, regardless of how close
-        // a data value gets to zero (a Bottom position can't make that
-        // guarantee: it's pulled toward the axis for exactly the near-zero
-        // points that caused the collision in the first place).
-        //
-        // Both series use the SAME small distance: each label stays close
-        // to its own point instead of reaching toward the other series. A
-        // larger distance on one series (tried earlier) backfires here —
-        // since both float upward, a bigger offset on the lower-valued
-        // series pushes its label *into* the higher-valued series' label
-        // instead of away from it, whenever the two points are close.
-        let label_pos = LabelPosition::Top;
-        let label_distance = 8.0;
+    // Gather every series' full data first, in one pass, instead of building
+    // and rendering each series immediately - the label stagger below needs
+    // to compare series against each other, so all of them have to be known
+    // before any one series' label distance can be decided.
+    struct SeriesData {
+        impl_: &'static str,
+        color: &'static str,
+        means: Vec<f64>,
+        los: Vec<f64>,
+        heights: Vec<f64>,
+        typical: f64, // median mean, used only to rank stagger order below
+    }
+    let mut all_series: Vec<SeriesData> = Vec::new();
+    for (&impl_, &color) in IMPLS.iter().zip(COLORS.iter()) {
         let (mut means, mut los, mut heights) = (Vec::new(), Vec::new(), Vec::new());
         for robot in robots {
             let (m, lo, hi) = to_vals(&stat(&robot.group, impl_, robot.bench_id)?);
@@ -200,6 +217,36 @@ fn build_chart(
             los.push(lo);
             heights.push(hi - lo); // band height, stacked on top of `lo`
         }
+        let mut sorted_means = means.clone();
+        sorted_means.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let typical = sorted_means[sorted_means.len() / 2];
+        all_series.push(SeriesData { impl_, color, means, los, heights, typical });
+    }
+
+    // Rank series by typical value, ascending, and stagger each one's label
+    // distance to match that rank — NOT by IMPLS order. Every label sits
+    // above its own point (never below, so none can ever collide with the
+    // x-axis tick labels), and a fixed per-series offset that ignores actual
+    // value order can backfire badly: earlier, "galaw-generated" (typically
+    // the smallest value) got a *larger* offset than "galaw" purely by
+    // IMPLS position, which pushed its label *up*, into "galaw"'s point and
+    // label instead of away from it, whenever the two were close. Ranking by
+    // the data itself instead of array position means the smallest-typical
+    // series always gets the smallest offset (staying close to its own,
+    // lower point) and each larger one gets pushed further up in turn — away
+    // from its neighbors below, not into them — regardless of how many
+    // series there are or what order IMPLS happens to list them in.
+    let mut rank_order: Vec<usize> = (0..all_series.len()).collect();
+    rank_order.sort_by(|&a, &b| all_series[a].typical.partial_cmp(&all_series[b].typical).unwrap());
+    let mut stagger_rank = vec![0usize; all_series.len()];
+    for (rank, &series_idx) in rank_order.iter().enumerate() {
+        stagger_rank[series_idx] = rank;
+    }
+
+    for (i, series) in all_series.into_iter().enumerate() {
+        let SeriesData { impl_, color, means, los, heights, .. } = series;
+        let label_pos = LabelPosition::Top;
+        let label_distance = 8.0 + stagger_rank[i] as f64 * LABEL_STAGGER_PX;
 
         let stack_id = format!("band_{impl_}");
         // Invisible base line lifts the band's baseline to the CI lower bound.
@@ -228,9 +275,9 @@ fn build_chart(
                 .label(
                     Label::new()
                         .show(true)
-                        .position(label_pos) // galaw above its line, k below
+                        .position(label_pos) // every series stacks above its line, staggered by value rank
                         .distance(label_distance) // gap between the point and the box
-                        .font_size(17.0)
+                        .font_size(LABEL_FONT_SIZE)
                         .color(color) // text in the line's color
                         .background_color("#ffffff") // white box fill
                         .border_color(color) // box outline in the line's color
