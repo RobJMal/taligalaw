@@ -10,11 +10,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let urdf_path = &args[1];
     let out_path = &args[2];
 
-    println!("urdf_path: {:?}", urdf_path);
-    println!("out_path: {:?}", out_path);
-
     let galaw_model = load_urdf(urdf_path)?;
-    println!("loaded {} - {} links, {} joints", galaw_model.name, galaw_model.links.len(), galaw_model.joints.len());
+
+    let import_code: String = format!(
+        "use nalgebra::{{Isometry3, Translation3, UnitQuaternion, Quaternion, Unit, Vector3}};"
+    );
+    println!("{}", import_code);
+
+    let fn_header_code: String = format!(
+        "pub fn compute_fk(joint_cmds: &[f64; {}]) -> [Isometry3<f64>; {}] {{",
+        galaw_model.num_actuated_joints,
+        galaw_model.links.len(),
+    );
+    println!("{}", fn_header_code);
+
+    let base_link_var_code: String = format!("let link_base_link = Isometry3::identity();");
+    println!("{}", base_link_var_code);
+
+    let result_var_code: String = format!("let result: Vec<Isometry3<f64>> = vec![{}, {}]", "Isometry3::identity();".to_string(), galaw_model.links.len()).to_string();
+    println!("{}", result_var_code);
 
     for joint in galaw_model.joints.iter() {
         let link_name: String = format!("link_{}", joint.child);
@@ -53,5 +67,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!();
     }
 
+    let fn_return_code: String = format!("result");
+    println!("{}", fn_return_code);
+
+    let fn_closer_code: String = format!("}}").to_string();
+    println!("{}", fn_closer_code);
+
+    println!("Generated code has been written to: {}", out_path);
     Ok(())
 }
