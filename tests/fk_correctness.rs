@@ -41,6 +41,14 @@ fn assert_transform_close(galaw_transform: &Isometry3<f64>, k_iso: &k::nalgebra:
     assert_orientation_close(&galaw_transform.rotation, &k_iso.rotation);
 }
 
+/// Both sides are plain `nalgebra::Isometry3<f64>` here (dynamic vs codegen'd
+/// FK), unlike `assert_transform_close` which bridges to `k`'s own re-exported
+/// nalgebra type.
+fn assert_galaw_transform_close(a: &Isometry3<f64>, b: &Isometry3<f64>) {
+    assert_position3d_close(&a.translation, &b.translation);
+    assert_orientation_close(&a.rotation, &b.rotation);
+}
+
 fn assert_galaw_fk_matches_k(
     galaw_model: &GalawModel,
     k_chain: &k::Chain<f64>,
@@ -109,6 +117,82 @@ fn check_fk_for_urdf(urdf_path: &str) -> TestResult {
     }
 
     Ok(())
+}
+
+/// Compares a codegen'd `compute_fk` against the dynamic `GalawModel::compute_fk`
+/// over many random poses, not just one hand-picked pose. Generic over the array
+/// sizes baked into each robot's generated signature (`[f64; N] -> [Isometry3<f64>; M]`),
+/// since those differ per robot and can't be unified any other way without codegen
+/// itself producing a shared trait. The dynamic path is the ground truth here
+/// (already checked against `k` above), so this only needs to confirm the
+/// generated code agrees with it.
+fn check_generated_matches_dynamic<const N: usize, const M: usize>(
+    urdf_path: &str,
+    generated_compute_fk: impl Fn(&[f64; N]) -> [Isometry3<f64>; M],
+) -> TestResult {
+    let galaw_model = load_urdf(urdf_path).unwrap();
+
+    let mut rng = ChaCha8Rng::seed_from_u64(RNG_SEED);
+    for _ in 0..NUM_POSES {
+        let joint_cmds: Vec<f64> = galaw_model
+            .joints
+            .iter()
+            .filter(|j| j.cmd_idx.is_some())
+            .map(|j| match (j.limit_lower, j.limit_upper) {
+                (Some(lower), Some(upper)) => rng.random_range(lower..upper),
+                _ => rng.random_range(0.0..0.0),
+            })
+            .collect();
+
+        let dynamic_links = galaw_model.compute_fk(&joint_cmds)?;
+
+        let joint_cmds_arr: [f64; N] = joint_cmds.clone().try_into().unwrap();
+        let generated_links = generated_compute_fk(&joint_cmds_arr);
+
+        for i in 0..galaw_model.links.len() {
+            assert_galaw_transform_close(&dynamic_links[i], &generated_links[i]);
+        }
+    }
+
+    Ok(())
+}
+
+/// Generates one `#[test]` per robot with codegen'd FK — same pattern as
+/// `fk_correctness_tests!` above (one macro-generated test per robot), but
+/// comparing generated vs. dynamic instead of dynamic vs. `k`. To cover a new
+/// robot, add a `name => path, compute_fk_path` line once
+/// `scripts/codegen_all_urdfs.sh` has generated code for it (the module name
+/// in the path comes from that script's sanitized output filename).
+///
+/// Note: the second field has to be the *full* path all the way to
+/// `compute_fk`, not just the module - a `path` fragment captured by
+/// macro_rules can't have `::compute_fk` appended to it later inside the
+/// macro body (it's already a sealed AST node by that point, so
+/// `$module::compute_fk` fails to parse).
+macro_rules! fk_codegen_correctness_tests {
+    ($($name:ident => $path:expr, $compute_fk:path),* $(,)?) => {
+        $(
+            #[test]
+            fn $name() -> TestResult {
+                check_generated_matches_dynamic($path, $compute_fk)
+            }
+        )*
+    };
+}
+
+fk_codegen_correctness_tests! {
+    codegen_simple_arm_2dof => "assets/urdf/custom/simple_arm_2dof.urdf", galaw::generated::simple_arm_2dof::compute_fk,
+    codegen_simple_arm_2dof_flipped => "assets/urdf/custom/simple_arm_2dof_flipped.urdf", galaw::generated::simple_arm_2dof_flipped::compute_fk,
+    codegen_simple_arm_3dof_rrp => "assets/urdf/custom/simple-arm_3dof_rrp.urdf", galaw::generated::simple_arm_3dof_rrp::compute_fk,   // Tests revolute and prismatic
+    codegen_simple_arm_6dof => "assets/urdf/custom/simple_arm_6dof.urdf", galaw::generated::simple_arm_6dof::compute_fk,
+    codegen_simple_arm_10dof => "assets/urdf/custom/simple_arm_10dof.urdf", galaw::generated::simple_arm_10dof::compute_fk,
+    codegen_simple_arm_20dof => "assets/urdf/custom/simple_arm_20dof.urdf", galaw::generated::simple_arm_20dof::compute_fk,
+
+    // Third-party robots
+    codegen_flexiv_enlight_l => "assets/urdf/third_party/Flexiv_Enlight-L/Enlight-L.urdf", galaw::generated::enlight_l::compute_fk,  // Tests revolute and fixed
+    codegen_anymal_d => "assets/urdf/third_party/ANYbotics_ANYmal-D/ANYmal-D.urdf", galaw::generated::anymal_d::compute_fk,     // Tests revolute and fixed
+    codegen_wuji_hand_v1_right => "assets/urdf/third_party/Wuji-Technology_Wuji-Hand/Wuji-Hand-v1_right.urdf", galaw::generated::wuji_hand_v1_right::compute_fk,  // Tests revolute and fixed
+    codegen_stretch4 => "assets/urdf/third_party/Hello-Robot_Stretch4/Stretch4.urdf", galaw::generated::stretch4::compute_fk,     // Tests continous, prismiatic, revolute, fixed
 }
 
 /// Generates one `#[test]` per URDF. Each robot becomes its own named test, so
