@@ -76,16 +76,17 @@ fn generate_fk_fn_code(urdf_path: &String, galaw_model: &GalawModel) -> Result<V
     codegen_output.push(header_comment);
 
     // Modules/libraries that are imported
+    let attribute_import_code: String = "#[allow(unused_imports)]".to_string();
+    codegen_output.push(attribute_import_code);
     let import_code: String = format!(
         "use nalgebra::{{Isometry3, Translation3, UnitQuaternion, Quaternion, Unit, Vector3}};"
     );
     codegen_output.push(import_code);
 
-    // Local variables are named directly after URDF link names, which aren't
-    // guaranteed to be lower case snake_case (e.g. ANYmal-D's "LF_HAA_drive") - silence
-    // the resulting lint rather than rewriting names URDF authors chose.
-    let allow_non_snake_case_code: String = "#[allow(non_snake_case)]".to_string();
-    codegen_output.push(allow_non_snake_case_code);
+    // URDFs don't have perfect casing, which can conflict with Rust. Want
+    // to silence it. 
+    let lint_attribute_code: String = "#[allow(non_snake_case)]".to_string();
+    codegen_output.push(lint_attribute_code);
 
     // Function header code
     let fn_header_code: String = format!(
