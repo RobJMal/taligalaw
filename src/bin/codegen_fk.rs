@@ -1,35 +1,40 @@
 use std::{env::args};
 
+// Third-party
+use nalgebra::{Translation3, UnitQuaternion};
+
 // Custom
-use galaw::{load_urdf, types::{GalawModel, Joint}};
+use galaw::{load_urdf, types::{GalawModel}};
 
 
 // ----- HELPER METHODS -----
-/// Removes unecessary multiplication for fixed joints.
+/// Simplify the fixed origin transform.
 /// 
-/// Even if the rotation and translation components are identity,
-/// they still consume compute. This can be removed.
-fn optimize_joint_local_code(
-    joint: &Joint,
-    joint_transform: &String,
-    translation: &String,
-    rotation: &String,
-) -> String {
-    let is_fixed_joint = joint.rot_axis.is_none() && joint.lin_axis.is_none();
-    let is_revolute_continuous_joint = joint.rot_axis.is_some() && joint.lin_axis.is_none();
-    let is_prismatic_joint = joint.rot_axis.is_none() && joint.lin_axis.is_some();
+/// Skip the quaternion multiply when rotation component is identity. 
+/// Skip the vector rotation and addition when translation component 
+/// is zero.
+fn optimize_joint_transform_code(
+    joint_transform_t: &Translation3<f64>,
+    joint_transform_r: &UnitQuaternion<f64>,
+    joint_transform_t_str: &str,
+    joint_transform_r_str: &str,
+) -> Option<String> {
+    let t_is_zero = joint_transform_t.x == 0.0 
+        && joint_transform_t.y == 0.0 
+        && joint_transform_t.z == 0.0;
+    let r_is_identity = joint_transform_r.w == 1.0
+        && joint_transform_r.i == 0.0
+        && joint_transform_r.j == 0.0
+        && joint_transform_r.k == 0.0;
 
-    if is_fixed_joint {
-        joint_transform.to_string()
-    } else if is_revolute_continuous_joint {
-        // translation is always identity here -> Isometry x UnitQuaternion
-        format!("{}*{}", joint_transform, rotation)
-    } else if is_prismatic_joint {
-        // rotation is always identity -> Isometry x Translation
-        format!("{}*{}", joint_transform, translation)
-    } else {
-        // Fallback in event joint model never sets both axes
-        format!("{}*Isometry3::from_parts({}, {})", joint_transform, translation, rotation)
+    match (t_is_zero, r_is_identity) {
+        (true, true) => None,
+        (false, true) => Some(joint_transform_t_str.to_string()),
+        (true, false) => Some(joint_transform_r_str.to_string()),
+        (false, false) => Some(format!(
+            "Isometry3::from_parts({}, {})",
+            joint_transform_t_str, joint_transform_r_str
+        )),
     }
 }
 
@@ -130,15 +135,25 @@ fn generate_fk_fn_code(urdf_path: &String, galaw_model: &GalawModel) -> Result<V
         )
         .to_string();
 
-        let joint_transform: String = format!(
-            "Isometry3::from_parts({}, {})",
-            joint_transform_t_str, joint_transform_r_str
-        );
+        let mut factors: Vec<String> = vec![parent_var];
+        if let Some(jt) = optimize_joint_transform_code(joint_transform_t, joint_transform_r, &joint_transform_t_str, &joint_transform_r_str) {
+            factors.push(jt);
+        }
 
-        let joint_local: String = optimize_joint_local_code(joint, &joint_transform, &translation, &rotation);
+        let is_fixed_joint = joint.rot_axis.is_none() && joint.lin_axis.is_none();
+        let is_revolute_continous_joint = joint.rot_axis.is_some() && joint.lin_axis.is_none();
+        let is_prismatic_joint = joint.lin_axis.is_some() && joint.rot_axis.is_none();
+
+        if is_revolute_continous_joint {
+            factors.push(rotation);
+        } else if is_prismatic_joint {
+            factors.push(translation);
+        } else if !is_fixed_joint {
+            factors.push(format!("Isometry3::from_parts({}, {})", translation, rotation));
+        }
 
         let code_line: String =
-            format!("let {} = {} * {};", link_name_var, parent_var, joint_local);
+            format!("let {} = {};", link_name_var, factors.join(" * "));
         link_vars_by_idx[joint.child_link_idx] = Some(link_name_var.clone());
         codegen_output.push(code_line);
     }
