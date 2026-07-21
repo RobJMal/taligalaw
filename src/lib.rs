@@ -1,4 +1,5 @@
 pub mod fixtures;
+pub mod generated;
 pub mod kinematics;
 pub mod parser;
 pub mod types;
