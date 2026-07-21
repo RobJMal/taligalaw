@@ -1,7 +1,7 @@
 use std::{env::args};
 
 // Third-party
-use nalgebra::{Translation3, UnitQuaternion};
+use nalgebra::{Translation3, UnitQuaternion, Vector3};
 
 // Custom
 use galaw::{load_urdf, types::{GalawModel}};
@@ -35,6 +35,31 @@ fn optimize_joint_transform_code(
             "Isometry3::from_parts({}, {})",
             joint_transform_t_str, joint_transform_r_str
         )),
+    }
+}
+
+// Bypasses axis-vector multiply when rotation axis is signed basis vector.
+fn optimize_axis_angle_rotation_code(vec: &Vector3<f64>, cmd_idx: usize) -> String {
+    let aligned = match (vec.x, vec.y, vec.z) {
+        (x, 0.0, 0.0) if x == 1.0 || x == -1.0 => Some((0, x)),
+        (0.0, y, 0.0) if y == 1.0 || y == -1.0 => Some((1, y)),
+        (0.0, 0.0, z) if z == 1.0 || z == -1.0 => Some((2, z)),
+        _ => None,
+    };
+
+    match aligned {
+        Some((slot, sign)) => {
+            let mut components = ["0.0", "0.0", "0.0"];
+            components[slot] = if sign > 0.0 {"s"} else {"-s"};
+            format!(
+                "{{ let (s, c) = (joint_cmds[{}] * 0.5).sin_cos(); UnitQuaternion::new_unchecked(Quaternion::new(c, {}, {}, {})) }}",
+                cmd_idx, components[0], components[1], components[2]
+            )
+        }
+        None => format!(
+            "UnitQuaternion::from_axis_angle(&Unit::new_unchecked(Vector3::new({:?}, {:?}, {:?})), joint_cmds[{}])",
+            vec.x, vec.y, vec.z, cmd_idx
+        ),
     }
 }
 
@@ -93,19 +118,7 @@ fn generate_fk_fn_code(urdf_path: &String, galaw_model: &GalawModel) -> Result<V
 
         // Using Unit::new_unchecked since already normalized in parser.rs
         let rotation: String = match joint.rot_axis {
-            Some(axis) => {
-                let vec = axis.into_inner();
-                let axis_vec_str: String = format!(
-                    "Unit::new_unchecked(Vector3::new({:?}, {:?}, {:?}))",
-                    vec.x, vec.y, vec.z
-                );
-                format!(
-                    "UnitQuaternion::from_axis_angle(&{}, joint_cmds[{}])",
-                    axis_vec_str,
-                    joint.cmd_idx.unwrap()
-                )
-                .to_string()
-            }
+            Some(axis) => optimize_axis_angle_rotation_code(&axis.into_inner(), joint.cmd_idx.unwrap()),
             None => "UnitQuaternion::identity()".to_string(),
         };
         let translation: String = match joint.lin_axis {
