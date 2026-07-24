@@ -21,7 +21,7 @@ fn read_axis(
         .children()
         .find(|n| n.tag_name().name() == "axis")
         .and_then(|n| n.attribute("xyz"))
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointAxisXyz(joint_name.to_string()))?;
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointAxisXyz(joint_name.to_string()))?;
     let (axis_x, axis_y, axis_z) = parse_vec3_str(axis_str)?;
 
     Ok(Unit::new_normalize(Vector3::new(axis_x, axis_y, axis_z)))
@@ -37,15 +37,15 @@ fn read_joint_limits(
     let joint_limit = node
         .children()
         .find(|n| n.tag_name().name() == "limit")
-        .ok_or_else(|| UrdfParseError::MissingXmlTagJointLimit(joint_name.to_string()))?;
+        .ok_or_else(|| UrdfParseError::MissingTagJointLimit(joint_name.to_string()))?;
 
     let limit_lower: f64 = joint_limit
         .attribute("lower")
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointLimitLower(joint_name.to_string()))?
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointLimitLower(joint_name.to_string()))?
         .parse::<f64>()?;
     let limit_upper: f64 = joint_limit
         .attribute("upper")
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointLimitUpper(joint_name.to_string()))?
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointLimitUpper(joint_name.to_string()))?
         .parse::<f64>()?;
 
     Ok((limit_lower, limit_upper))
@@ -55,7 +55,7 @@ fn read_joint_limits(
 fn parse_link(node: roxmltree::Node<'_, '_>) -> Result<Link, Box<dyn std::error::Error>> {
     let link_name: String = node
         .attribute("name")
-        .ok_or(UrdfParseError::MissingXmlAttributeLinkName)?
+        .ok_or(UrdfParseError::MissingAttributeLinkName)?
         .to_string();
     Ok(Link { name: link_name })
 }
@@ -64,40 +64,40 @@ fn parse_link(node: roxmltree::Node<'_, '_>) -> Result<Link, Box<dyn std::error:
 fn parse_joint(node: roxmltree::Node<'_, '_>) -> Result<Joint, Box<dyn std::error::Error>> {
     let name: String = node
         .attribute("name")
-        .ok_or(UrdfParseError::MissingXmlAttributeJointName)?
+        .ok_or(UrdfParseError::MissingAttributeJointName)?
         .to_string();
     let joint_type: JointType = node
         .attribute("type")
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointType(name.clone()))?
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointType(name.clone()))?
         .parse()?;
     let parent: String = node
         .children()
         .find(|n| n.tag_name().name() == "parent")
         .and_then(|n| n.attribute("link"))
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointParentLink(name.clone()))?
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointParentLink(name.clone()))?
         .to_string();
     let child: String = node
         .children()
         .find(|n| n.tag_name().name() == "child")
         .and_then(|n| n.attribute("link"))
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointChildLink(name.clone()))?
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointChildLink(name.clone()))?
         .to_string();
 
     // Extracting joint XYZ and RPY
     let joint_origin = node
         .children()
         .find(|n| n.tag_name().name() == "origin")
-        .ok_or_else(|| UrdfParseError::MissingXmlTagJointOrigin(name.clone()))?;
+        .ok_or_else(|| UrdfParseError::MissingTagJointOrigin(name.clone()))?;
 
     let xyz_str: &str = joint_origin
         .attribute("xyz")
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointOriginXyz(name.clone()))?;
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointOriginXyz(name.clone()))?;
     let (x, y, z) = parse_vec3_str(xyz_str)?;
     let xyz = Vector3::new(x, y, z);
 
     let rpy_str = joint_origin
         .attribute("rpy")
-        .ok_or_else(|| UrdfParseError::MissingXmlAttributeJointOriginRpy(name.clone()))?;
+        .ok_or_else(|| UrdfParseError::MissingAttributeJointOriginRpy(name.clone()))?;
     let (roll, pitch, yaw) = parse_vec3_str(rpy_str)?;
     let rotation = UnitQuaternion::from_euler_angles(roll, pitch, yaw);
 
@@ -283,7 +283,7 @@ pub fn load_urdf(urdf_path: &str) -> Result<GalawModel, Box<dyn std::error::Erro
     let robot_name: String = doc
         .root_element()
         .attribute("name")
-        .ok_or(UrdfParseError::MissingXmlAttributeRobotName)?
+        .ok_or(UrdfParseError::MissingAttributeRobotName)?
         .to_string();
     let mut links: Vec<Link> = Vec::new();
     let mut joints: Vec<Joint> = Vec::new();

@@ -19,45 +19,45 @@ pub enum UrdfParseError {
         source: roxmltree::Error,
     },
     #[error("robot tag missing name attribute")]
-    MissingXmlAttributeRobotName,
+    MissingAttributeRobotName,
     #[error("link tag missing name attribute")]
-    MissingXmlAttributeLinkName,
+    MissingAttributeLinkName,
 
     // Errors for <joint/>
     #[error("joint tag missing name attribute")]
-    MissingXmlAttributeJointName,
+    MissingAttributeJointName,
     #[error("joint {0} missing type attribute")]
-    MissingXmlAttributeJointType(String),
+    MissingAttributeJointType(String),
 
     // <parent/>
     #[error("missing parent tag for joint {0}")]
-    MissingXmlTagJointParent(String),
+    MissingTagJointParent(String),
     #[error("missing parent link for joint {0}")]
-    MissingXmlAttributeJointParentLink(String),
+    MissingAttributeJointParentLink(String),
 
     // <child/>
     #[error("missing child tag for joint {0}")]
-    MissingXmlTagChildLink(String),
+    MissingTagChildLink(String),
     #[error("missing child link for joint {0}")]
-    MissingXmlAttributeJointChildLink(String),
+    MissingAttributeJointChildLink(String),
 
     // <origin/>
     #[error("joint {0} missing origin")]
-    MissingXmlTagJointOrigin(String),
+    MissingTagJointOrigin(String),
     #[error("missing xyz data for joint {0}")]
-    MissingXmlAttributeJointOriginXyz(String),
+    MissingAttributeJointOriginXyz(String),
     #[error("missing rpy data for joint {0}")]
-    MissingXmlAttributeJointOriginRpy(String),
+    MissingAttributeJointOriginRpy(String),
 
     // <axis/>
     #[error("missing axis xyz data for joint {0}")]
-    MissingXmlAttributeJointAxisXyz(String),
+    MissingAttributeJointAxisXyz(String),
 
     // <limit/>
     #[error("missing joint limit tag for joint {0}")]
-    MissingXmlTagJointLimit(String),
+    MissingTagJointLimit(String),
     #[error("missing joint limit lower attribute for joint {0}")]
-    MissingXmlAttributeJointLimitLower(String),
+    MissingAttributeJointLimitLower(String),
     #[error("missing joint limit upper attribute for joint {0}")]
-    MissingXmlAttributeJointLimitUpper(String),
+    MissingAttributeJointLimitUpper(String),
 }
